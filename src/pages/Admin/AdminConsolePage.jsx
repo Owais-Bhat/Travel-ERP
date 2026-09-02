@@ -1,4 +1,18 @@
 import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import {
   MdAdd,
   MdBarChart,
@@ -119,8 +133,25 @@ const ADMIN_TABS = [
   { key: 'audit', label: 'Audit Log', icon: MdHistory },
 ];
 
+const ADMIN_TAB_KEYS = ADMIN_TABS.map((tab) => tab.key);
+
 export default function AdminConsolePage() {
-  const [activeTab, setActiveTab] = useState('overview');
+  const navigate = useNavigate();
+  const { tab: tabParam } = useParams();
+  const [activeTab, setActiveTabState] = useState(ADMIN_TAB_KEYS.includes(tabParam) ? tabParam : 'overview');
+
+  // Keep the tab in sync with the URL — a sidebar link like /admin/institutions
+  // should land on that tab, and switching tabs should update the address bar
+  // so it's linkable/bookmarkable and the browser back button works.
+  useEffect(() => {
+    setActiveTabState(ADMIN_TAB_KEYS.includes(tabParam) ? tabParam : 'overview');
+  }, [tabParam]);
+
+  const setActiveTab = (key) => {
+    setActiveTabState(key);
+    navigate(key === 'overview' ? '/admin' : `/admin/${key}`);
+  };
+
   const [institutions, setInstitutions] = useState([]);
   const [usage, setUsage] = useState(null);
   const [auditEvents, setAuditEvents] = useState([]);
@@ -276,6 +307,24 @@ export default function AdminConsolePage() {
     .map(inst => ({ institution: inst, health: tenantHealth[inst.id] }))
     .sort((a, b) => a.health.score - b.health.score)
     .slice(0, 5);
+
+  const CHART_COLORS = ['#0E7C7B', '#4059AD', '#F59E0B', '#E0644A', '#7C3AED', '#10B981'];
+  const planChartData = Object.entries(PLAN_DEFINITIONS).map(([planKey, plan]) => ({
+    name: plan.label,
+    value: institutions.filter(inst => (inst.subscription_plan || 'free') === planKey).length,
+  })).filter(item => item.value > 0);
+  const healthChartData = [
+    { name: 'Healthy', value: healthyCount, fill: '#10B981' },
+    { name: 'Watch', value: watchCount, fill: '#F59E0B' },
+    { name: 'Risk', value: riskCount, fill: '#EF4444' },
+  ];
+  const topFeatureChartData = Object.entries(usageByFeature)
+    .map(([featureKey, item]) => ({
+      name: FEATURE_CATALOG.find(feature => feature.key === featureKey)?.label || featureKey,
+      events: item.count || 0,
+    }))
+    .sort((a, b) => b.events - a.events)
+    .slice(0, 8);
 
   const openTenantDetail = (institutionId) => {
     setSelectedInstitutionId(institutionId);
@@ -501,6 +550,64 @@ export default function AdminConsolePage() {
             <p className="text-sm font-semibold text-slate-500 mb-2">Unused Live Features</p>
             <p className="text-3xl font-extrabold text-slate-950 mb-1">{unusedLiveFeatureCount}</p>
             <p className="text-xs text-slate-500 mb-0">Live modules with no recent tenant activity.</p>
+          </GlassCard>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+          <GlassCard className="p-5">
+            <p className="text-sm font-semibold text-slate-500 mb-1">Plan Distribution</p>
+            <p className="text-xs text-slate-500 mb-4">Institutions per subscription plan.</p>
+            {planChartData.length === 0 ? (
+              <div className="h-[220px] flex items-center justify-center text-sm text-slate-400">No institutions yet.</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie data={planChartData} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80} paddingAngle={2}>
+                    {planChartData.map((entry, index) => (
+                      <Cell key={entry.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip />
+                  <Legend verticalAlign="bottom" height={32} iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </GlassCard>
+
+          <GlassCard className="p-5">
+            <p className="text-sm font-semibold text-slate-500 mb-1">Tenant Health Breakdown</p>
+            <p className="text-xs text-slate-500 mb-4">How many accounts are healthy, watch, or at risk.</p>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={healthChartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                <RechartsTooltip cursor={{ fill: 'rgba(15,23,42,0.04)' }} />
+                <Bar dataKey="value" name="Institutions" radius={[6, 6, 0, 0]}>
+                  {healthChartData.map(entry => (
+                    <Cell key={entry.name} fill={entry.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </GlassCard>
+
+          <GlassCard className="p-5">
+            <p className="text-sm font-semibold text-slate-500 mb-1">Top Used Features</p>
+            <p className="text-xs text-slate-500 mb-4">Most-used modules across every tenant, last 30 days.</p>
+            {topFeatureChartData.length === 0 ? (
+              <div className="h-[220px] flex items-center justify-center text-sm text-slate-400">No feature usage recorded yet.</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={topFeatureChartData} layout="vertical" margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
+                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                  <RechartsTooltip cursor={{ fill: 'rgba(15,23,42,0.04)' }} />
+                  <Bar dataKey="events" name="Events" fill="#0E7C7B" radius={[0, 6, 6, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </GlassCard>
         </div>
 

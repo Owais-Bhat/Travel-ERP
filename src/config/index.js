@@ -138,7 +138,20 @@ const TENANT_ADMIN_MENU = [
 
 export const MENU_ITEMS = {
   super_admin: [
-    { key: 'admin', iconName: 'MdAdminPanelSettings', label: 'HQ Console', path: '/admin' },
+    {
+      key: 'admin',
+      iconName: 'MdAdminPanelSettings',
+      label: 'HQ Console',
+      subItems: [
+        { key: 'overview', label: 'Overview', path: '/admin' },
+        { key: 'institutions', label: 'Institutions', path: '/admin/institutions' },
+        { key: 'create', label: 'Create Institution', path: '/admin/create' },
+        { key: 'features', label: 'Feature Control', path: '/admin/features' },
+        { key: 'users', label: 'Tenant Users', path: '/admin/users' },
+        { key: 'usage', label: 'Feature Usage', path: '/admin/usage' },
+        { key: 'audit', label: 'Audit Log', path: '/admin/audit' },
+      ],
+    },
     { key: 'dashboard', iconName: 'MdDashboard', label: 'Tenant Preview', path: '/dashboard' },
     { key: 'reports', iconName: 'MdAssessment', label: 'Reports', path: '/reports' },
     { key: 'analytics', iconName: 'MdTrendingUp', label: 'AI Insights', path: '/performance-analysis' },

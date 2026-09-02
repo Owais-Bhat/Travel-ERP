@@ -98,6 +98,14 @@ function App() {
                   </GuardedPage>
                 }
               />
+              <Route
+                path="/admin/:tab"
+                element={
+                  <GuardedPage path="/admin" billing={false}>
+                    <AdminConsolePage />
+                  </GuardedPage>
+                }
+              />
 
               {/* Module Routes */}
               <Route
