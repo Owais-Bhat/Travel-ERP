@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react';
 import {
+  MdAdd,
+  MdBarChart,
   MdBusiness,
   MdCheckCircle,
   MdClose,
   MdCreditCard,
+  MdDashboard,
   MdHistory,
   MdPeople,
+  MdPeopleAlt,
+  MdTune,
   MdWarning,
 } from 'react-icons/md';
 import MainLayout from '../../components/Layout/MainLayout';
@@ -13,6 +18,7 @@ import GlassCard from '../../components/Common/GlassCard';
 import Badge from '../../components/Common/Badge';
 import Button from '../../components/Common/Button';
 import Input from '../../components/Common/Input';
+import Tabs from '../../components/Common/Tabs';
 import {
   changeInstitutionPlan,
   createAdminInstitution,
@@ -103,7 +109,18 @@ function Metric({ icon: Icon, label, value, tone = 'teal' }) {
   );
 }
 
+const ADMIN_TABS = [
+  { key: 'overview', label: 'Overview', icon: MdDashboard },
+  { key: 'institutions', label: 'Institutions', icon: MdBusiness },
+  { key: 'create', label: 'Create Institution', icon: MdAdd },
+  { key: 'features', label: 'Feature Control', icon: MdTune },
+  { key: 'users', label: 'Tenant Users', icon: MdPeopleAlt },
+  { key: 'usage', label: 'Feature Usage', icon: MdBarChart },
+  { key: 'audit', label: 'Audit Log', icon: MdHistory },
+];
+
 export default function AdminConsolePage() {
+  const [activeTab, setActiveTab] = useState('overview');
   const [institutions, setInstitutions] = useState([]);
   const [usage, setUsage] = useState(null);
   const [auditEvents, setAuditEvents] = useState([]);
@@ -263,6 +280,7 @@ export default function AdminConsolePage() {
   const openTenantDetail = (institutionId) => {
     setSelectedInstitutionId(institutionId);
     setTenantDetailOpen(true);
+    setActiveTab('institutions');
   };
 
   const loadTenantUsers = async (institutionId = selectedInstitution?.id) => {
@@ -448,6 +466,10 @@ export default function AdminConsolePage() {
           </GlassCard>
         )}
 
+        <Tabs tabs={ADMIN_TABS} value={activeTab} onChange={setActiveTab} id="admin-console" />
+
+        {activeTab === 'overview' && (
+        <>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
           <Metric icon={MdBusiness} label="Institutions" value={institutions.length} tone="teal" />
           <Metric icon={MdPeople} label="Active Users" value={activeUsers} tone="indigo" />
@@ -482,6 +504,11 @@ export default function AdminConsolePage() {
           </GlassCard>
         </div>
 
+        </>
+        )}
+
+        {activeTab === 'institutions' && (
+        <>
         <GlassCard className="p-5">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
             <div>
@@ -782,7 +809,11 @@ export default function AdminConsolePage() {
             </div>
           </GlassCard>
         )}
+        </>
+        )}
 
+        {activeTab === 'audit' && (
+        <>
         <GlassCard className="p-0 overflow-hidden">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-6 py-5 border-b border-slate-200">
             <div className="flex items-start gap-3">
@@ -842,7 +873,11 @@ export default function AdminConsolePage() {
             </div>
           )}
         </GlassCard>
+        </>
+        )}
 
+        {activeTab === 'features' && (
+        <>
         <div className="grid grid-cols-1 xl:grid-cols-[1.1fr,1.9fr] gap-6">
           <GlassCard className="p-6">
             <h2 className="text-xl font-bold text-slate-950 mb-1">Plan Matrix</h2>
@@ -1034,7 +1069,11 @@ export default function AdminConsolePage() {
             )}
           </GlassCard>
         </div>
+        </>
+        )}
 
+        {activeTab === 'users' && (
+        <>
         <GlassCard className="p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-5">
             <div>
@@ -1190,7 +1229,11 @@ export default function AdminConsolePage() {
             </div>
           )}
         </GlassCard>
+        </>
+        )}
 
+        {activeTab === 'usage' && (
+        <>
         <GlassCard className="p-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between mb-5">
             <div>
@@ -1232,7 +1275,11 @@ export default function AdminConsolePage() {
             })}
           </div>
         </GlassCard>
+        </>
+        )}
 
+        {activeTab === 'create' && (
+        <>
         <GlassCard className="p-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between mb-6">
             <div>
@@ -1269,7 +1316,7 @@ export default function AdminConsolePage() {
                       type="button"
                       size="sm"
                       variant="secondary"
-                      onClick={() => setSelectedInstitutionId(lastProvisioned.institution?.id || '')}
+                      onClick={() => openTenantDetail(lastProvisioned.institution?.id || '')}
                     >
                       Review Tenant
                     </Button>
@@ -1391,7 +1438,11 @@ export default function AdminConsolePage() {
             </div>
           </form>
         </GlassCard>
+        </>
+        )}
 
+        {activeTab === 'institutions' && (
+        <>
         <GlassCard className="p-0 overflow-hidden">
           <div className="px-6 py-5 border-b border-slate-200">
             <h2 className="text-xl font-bold text-slate-950 mb-1">Institution Accounts</h2>
@@ -1486,6 +1537,8 @@ export default function AdminConsolePage() {
             </div>
           )}
         </GlassCard>
+        </>
+        )}
       </div>
     </MainLayout>
   );
