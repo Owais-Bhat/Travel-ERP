@@ -1,0 +1,29 @@
+# Local MySQL for development.
+#
+#   docker compose up -d
+#   cd backend && npm run migrate && npm run seed
+#
+# Port 3307 on the host so it does not collide with a MySQL you may already
+# have installed. Match backend/.env: MYSQL_PORT=3307.
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: cybermilo-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: cybermilo
+      MYSQL_DATABASE: cybermilo
+    ports:
+      - "3307:3306"
+    volumes:
+      - cybermilo-mysql-data:/var/lib/mysql
+      # Applied automatically the first time the volume is created.
+      - ./mysql_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-pcybermilo"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  cybermilo-mysql-data:

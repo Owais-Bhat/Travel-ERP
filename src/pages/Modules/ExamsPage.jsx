@@ -5,7 +5,7 @@ import Button from '../../components/Common/Button';
 import Input from '../../components/Common/Input';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import supabase from '../../lib/supabase';
+import api from '../../lib/api';
 import { formatDate } from '../../utils/helpers';
 import {
   MdAdd,
@@ -104,48 +104,50 @@ export default function ExamsPage() {
   const loadExams = useCallback(async () => {
     if (!profile?.institution_id) return;
     setLoadingExams(true);
-    const { data, error } = await supabase
-      .from('exams')
-      .select('*')
-      .eq('institution_id', profile.institution_id)
-      .order('exam_date', { ascending: false });
-
-    if (error) {
-      notification.error('Failed to load exams: ' + error.message);
-    } else {
+    try {
+      const { data } = await api.get('/exams');
       setExams(data || []);
       setCompletedExams((data || []).filter((e) => e.status === 'completed'));
+    } catch (err) {
+      notification.error('Failed to load exams: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setLoadingExams(false);
     }
-    setLoadingExams(false);
   }, [profile?.institution_id]);
 
   const loadResults = useCallback(async (examId) => {
     if (!examId) { setResults([]); return; }
     setLoadingResults(true);
-    const { data, error } = await supabase
-      .from('exam_results')
-      .select('*, students(first_name, last_name, admission_no)')
-      .eq('exam_id', examId);
-
-    if (error) {
-      notification.error('Failed to load results: ' + error.message);
-    } else {
-      setResults(data || []);
+    try {
+      const { data } = await api.get(`/exams/${examId}/results`);
+      // The API returns the student's columns flat; the table reads them
+      // from a nested `students` object, so shape them here.
+      setResults((data || []).map((row) => ({
+        ...row,
+        students: {
+          first_name: row.first_name,
+          last_name: row.last_name,
+          admission_no: row.admission_no,
+        },
+      })));
+    } catch (err) {
+      notification.error('Failed to load results: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setLoadingResults(false);
     }
-    setLoadingResults(false);
   }, []);
 
   const loadClassStudents = useCallback(async (className) => {
     if (!className || !profile?.institution_id) return;
-    const { data } = await supabase
-      .from('students')
-      .select('id, first_name, last_name, admission_no')
-      .eq('institution_id', profile.institution_id)
-      .eq('class_name', className);
-    setClassStudents(data || []);
-    const initial = {};
-    (data || []).forEach((s) => { initial[s.id] = ''; });
-    setMarksInput(initial);
+    try {
+      const { data } = await api.get('/students', { params: { class_name: className, pageSize: 200, page: 1 } });
+      const students = data?.data || [];
+      setClassStudents(students);
+      setMarksInput(Object.fromEntries(students.map((student) => [student.id, ''])));
+    } catch {
+      setClassStudents([]);
+      setMarksInput({});
+    }
   }, [profile?.institution_id]);
 
   useEffect(() => { loadExams(); }, [loadExams]);
@@ -190,23 +192,24 @@ export default function ExamsPage() {
       return;
     }
     setSavingExam(true);
-    const { error } = await supabase.from('exams').insert([{
-      institution_id: profile.institution_id,
-      title, subject, class_name,
-      exam_date,
-      total_marks: parseInt(total_marks),
-      pass_marks: parseInt(pass_marks),
-      status: 'upcoming',
-    }]);
-    setSavingExam(false);
-
-    if (error) {
-      notification.error('Failed to create exam: ' + error.message);
-    } else {
+    try {
+      await api.post('/exams', {
+        title,
+        subject,
+        class_name,
+        exam_date,
+        total_marks: parseInt(total_marks, 10),
+        pass_marks: parseInt(pass_marks, 10),
+        status: 'upcoming',
+      });
       notification.success('Exam created successfully');
       setCreateModal(false);
       setExamForm({ title: '', subject: '', class_name: '', exam_date: '', total_marks: '', pass_marks: '' });
       loadExams();
+    } catch (err) {
+      notification.error('Failed to create exam: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setSavingExam(false);
     }
   };
 
@@ -215,18 +218,15 @@ export default function ExamsPage() {
   const handleUpdateStatus = async () => {
     if (!statusModal) return;
     setSavingStatus(true);
-    const { error } = await supabase
-      .from('exams')
-      .update({ status: newStatus })
-      .eq('id', statusModal.id);
-    setSavingStatus(false);
-
-    if (error) {
-      notification.error('Failed to update status: ' + error.message);
-    } else {
+    try {
+      await api.put(`/exams/${statusModal.id}`, { status: newStatus });
       notification.success('Exam status updated');
       setStatusModal(null);
       loadExams();
+    } catch (err) {
+      notification.error('Failed to update status: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setSavingStatus(false);
     }
   };
 
@@ -261,17 +261,22 @@ export default function ExamsPage() {
     }
 
     setSavingResults(true);
-    const { error } = await supabase
-      .from('exam_results')
-      .upsert(entries, { onConflict: 'exam_id,student_id' });
-    setSavingResults(false);
-
-    if (error) {
-      notification.error('Failed to save results: ' + error.message);
-    } else {
+    try {
+      // POST /results is an upsert per student, so re-entering a mark
+      // corrects it rather than duplicating the row.
+      await Promise.all(entries.map((entry) => api.post(`/exams/${selectedExam.id}/results`, {
+        student_id: entry.student_id,
+        marks_obtained: entry.marks_obtained,
+        grade: entry.grade,
+        remarks: entry.remarks,
+      })));
       notification.success(`Saved ${entries.length} result(s)`);
       setEnterModal(false);
       loadResults(selectedExam.id);
+    } catch (err) {
+      notification.error('Failed to save results: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setSavingResults(false);
     }
   };
 

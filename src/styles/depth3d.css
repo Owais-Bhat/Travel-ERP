@@ -1,0 +1,193 @@
+/* ============================================================
+   CyberMilo — 3D depth layer
+   ------------------------------------------------------------
+   Real perspective, no WebGL. Elements sit on Z planes inside a
+   shared scene, so hovering a card actually rotates it in space
+   and its contents parallax by their own depth.
+
+   Everything here degrades to flat, still layout when the user
+   asks for reduced motion.
+   ============================================================ */
+
+/* --- scene ------------------------------------------------- */
+.scene {
+  perspective: var(--neu-perspective, 1200px);
+  perspective-origin: 50% 40%;
+}
+
+.scene-near  { perspective: 800px; }
+.scene-far   { perspective: 1800px; }
+
+.layer-3d {
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+/* --- depth planes ------------------------------------------
+   Children lift off their parent's surface. Combined with a
+   tilting parent this produces genuine parallax rather than a
+   fake offset. */
+.depth-0  { transform: translateZ(0); }
+.depth-1  { transform: translateZ(12px); }
+.depth-2  { transform: translateZ(26px); }
+.depth-3  { transform: translateZ(44px); }
+.depth-4  { transform: translateZ(68px); }
+.depth-back { transform: translateZ(-24px); }
+
+/* --- tilt ---------------------------------------------------
+   The JS hook writes --tilt-x/--tilt-y; this keeps the transform
+   declarative so the browser can composite it on the GPU. */
+.tilt-3d {
+  transform-style: preserve-3d;
+  transform:
+    perspective(var(--neu-perspective, 1200px))
+    rotateX(var(--tilt-x, 0deg))
+    rotateY(var(--tilt-y, 0deg))
+    translateZ(var(--tilt-z, 0px))
+    scale(var(--tilt-scale, 1));
+  will-change: transform;
+}
+
+/* A moving specular highlight sells the tilt more than the
+   rotation itself does. */
+.tilt-sheen {
+  position: relative;
+  overflow: hidden;
+}
+
+.tilt-sheen::before {
+  content: '';
+  position: absolute;
+  inset: -40%;
+  pointer-events: none;
+  opacity: var(--sheen-opacity, 0);
+  background: radial-gradient(
+    24rem 24rem at var(--sheen-x, 50%) var(--sheen-y, 50%),
+    rgba(255, 255, 255, 0.55),
+    transparent 62%
+  );
+  transition: opacity 300ms var(--neu-ease, ease);
+  mix-blend-mode: soft-light;
+}
+
+[data-theme='dark'] .tilt-sheen::before {
+  background: radial-gradient(
+    24rem 24rem at var(--sheen-x, 50%) var(--sheen-y, 50%),
+    rgba(255, 255, 255, 0.16),
+    transparent 62%
+  );
+}
+
+/* --- ambient motion ---------------------------------------- */
+@keyframes neu-float {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50%      { transform: translate3d(0, -8px, 0); }
+}
+
+@keyframes neu-float-slow {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+  33%      { transform: translate3d(6px, -10px, 0) rotate(1.2deg); }
+  66%      { transform: translate3d(-5px, -4px, 0) rotate(-0.8deg); }
+}
+
+@keyframes neu-breathe {
+  0%, 100% { box-shadow: var(--neu-e2); }
+  50%      { box-shadow: var(--neu-e3); }
+}
+
+@keyframes neu-orbit {
+  from { transform: rotate(0deg) translateX(var(--orbit-r, 40px)) rotate(0deg); }
+  to   { transform: rotate(360deg) translateX(var(--orbit-r, 40px)) rotate(-360deg); }
+}
+
+@keyframes neu-rise {
+  from { opacity: 0; transform: translate3d(0, 18px, -30px); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes neu-pulse-ring {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--neu-primary) 45%, transparent); }
+  70%  { box-shadow: 0 0 0 12px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+.animate-float       { animation: neu-float 5s var(--neu-ease, ease) infinite; }
+.animate-float-slow  { animation: neu-float-slow 11s ease-in-out infinite; }
+.animate-breathe     { animation: neu-breathe 4.5s ease-in-out infinite; }
+.animate-rise        { animation: neu-rise 520ms var(--neu-ease-out, ease) both; }
+.animate-pulse-ring  { animation: neu-pulse-ring 2s ease-out infinite; }
+
+/* Stagger helper for lists that reveal on mount. */
+.stagger > * { animation: neu-rise 460ms var(--neu-ease-out, ease) both; }
+.stagger > *:nth-child(1)  { animation-delay: 0ms; }
+.stagger > *:nth-child(2)  { animation-delay: 45ms; }
+.stagger > *:nth-child(3)  { animation-delay: 90ms; }
+.stagger > *:nth-child(4)  { animation-delay: 135ms; }
+.stagger > *:nth-child(5)  { animation-delay: 180ms; }
+.stagger > *:nth-child(6)  { animation-delay: 225ms; }
+.stagger > *:nth-child(7)  { animation-delay: 270ms; }
+.stagger > *:nth-child(8)  { animation-delay: 315ms; }
+.stagger > *:nth-child(n + 9) { animation-delay: 360ms; }
+
+/* --- decorative depth field --------------------------------
+   Soft extruded blobs drifting behind the app shell. Purely
+   ambient; pointer-events off and hidden from assistive tech. */
+.depth-field {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Kept faint on purpose: these are meant to give the flat canvas some
+   parallax, not to read as shapes in their own right. */
+.depth-blob {
+  position: absolute;
+  border-radius: 46% 54% 58% 42% / 52% 44% 56% 48%;
+  background: var(--neu-bg);
+  box-shadow: var(--neu-e3);
+  opacity: 0.34;
+  filter: blur(2px);
+}
+
+[data-theme='dark'] .depth-blob {
+  opacity: 0.5;
+}
+
+/* --- reduced motion ---------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .tilt-3d {
+    transform: none !important;
+  }
+
+  .tilt-sheen::before {
+    display: none;
+  }
+
+  .animate-float,
+  .animate-float-slow,
+  .animate-breathe,
+  .animate-rise,
+  .animate-pulse-ring,
+  .stagger > * {
+    animation: none !important;
+  }
+
+  .depth-blob {
+    animation: none !important;
+  }
+
+  .stagger > * {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Phones get the depth without the expense: keep the transforms,
+   drop the always-running ambient animations. */
+@media (max-width: 768px) {
+  .depth-field { display: none; }
+  .animate-float-slow,
+  .animate-breathe { animation: none; }
+}

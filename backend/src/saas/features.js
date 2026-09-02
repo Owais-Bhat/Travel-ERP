@@ -12,7 +12,14 @@ export const FEATURE_CATALOG = [
   { key: 'career_path', label: 'Career Path AI', status: 'live' },
   { key: 'performance_analysis', label: 'Performance AI', status: 'live' },
   { key: 'fee_recovery', label: 'Fee Recovery AI', status: 'live' },
-  { key: 'reports_builder', label: 'Custom Reports', status: 'planned' },
+  { key: 'programs', label: 'Programs & Courses', status: 'live' },
+  { key: 'certifications', label: 'Certifications', status: 'live' },
+  { key: 'scholarships', label: 'Scholarships & Cashback', status: 'live' },
+  { key: 'referrals', label: 'Referrals & Commissions', status: 'live' },
+  { key: 'leads', label: 'Lead CRM', status: 'live' },
+  { key: 'documents', label: 'Document Vault', status: 'live' },
+  { key: 'reports', label: 'Reports & Analytics', status: 'live' },
+  { key: 'reports_builder', label: 'Custom Report Builder', status: 'planned' },
   { key: 'payments', label: 'Payment Gateway', status: 'planned' },
   { key: 'whatsapp_sms', label: 'WhatsApp & SMS', status: 'planned' },
   { key: 'hostel', label: 'Hostel', status: 'planned' },
@@ -27,9 +34,9 @@ export const FEATURE_CATALOG = [
 
 export const PLAN_DEFINITIONS = {
   free: ['dashboard', 'students', 'attendance'],
-  starter: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'exams', 'communication'],
-  growth: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'ai_tutor', 'performance_analysis'],
-  pro: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments'],
+  starter: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'exams', 'communication', 'documents', 'leads'],
+  growth: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'ai_tutor', 'performance_analysis', 'documents', 'leads', 'programs', 'certifications', 'reports'],
+  pro: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments', 'documents', 'leads', 'programs', 'certifications', 'reports', 'scholarships', 'referrals'],
   enterprise: FEATURE_CATALOG.map(feature => feature.key),
 };
 
@@ -49,6 +56,57 @@ export const PLAN_LIMITS = {
 
 export function getPlanLimits(plan = 'free') {
   return PLAN_LIMITS[plan] || PLAN_LIMITS.free;
+}
+
+/**
+ * Roles a tenant admin is allowed to restrict.
+ *
+ * institution_admin/principal are excluded on purpose: they are the ones
+ * setting the restrictions, so letting them lock themselves out would be a
+ * self-inflicted support ticket. super_admin/admin are platform roles and
+ * never tenant-restricted at all.
+ */
+export const RESTRICTABLE_ROLES = ['teacher', 'student', 'parent', 'staff'];
+
+/** `settings.role_features` narrowed to live features and restrictable roles. */
+export function sanitizeRoleFeatures(raw) {
+  const clean = {};
+  if (!raw || typeof raw !== 'object') return clean;
+  const liveKeys = new Set(FEATURE_CATALOG.filter((f) => f.status === 'live').map((f) => f.key));
+
+  for (const role of RESTRICTABLE_ROLES) {
+    const value = raw[role];
+    if (!Array.isArray(value)) continue;
+    clean[role] = [...new Set(value.filter((key) => liveKeys.has(key)))];
+  }
+  return clean;
+}
+
+/**
+ * What a specific role can actually see: the plan's features, narrowed
+ * further by whatever the tenant admin restricted that role to. A role
+ * with no override in `settings.role_features` gets everything the plan
+ * enables — restrictions are opt-in, so this stays backward compatible
+ * with every tenant that has never touched the setting.
+ */
+export function getEffectiveFeatureMap(institution, role) {
+  const plan = institution?.subscription_plan || 'free';
+  const planMap = getPlanFeatureMap(plan, institution?.settings?.modules || {});
+
+  if (!RESTRICTABLE_ROLES.includes(role)) return planMap;
+
+  const override = institution?.settings?.role_features?.[role];
+  if (!Array.isArray(override)) return planMap;
+
+  const allowed = new Set(override);
+  return Object.fromEntries(
+    Object.entries(planMap).map(([key, enabled]) => [key, enabled && allowed.has(key)])
+  );
+}
+
+export function isFeatureEnabledForRole(institution, role, featureKey) {
+  if (!featureKey) return true;
+  return Boolean(getEffectiveFeatureMap(institution, role)[featureKey]);
 }
 
 export function getBillingState(institution) {

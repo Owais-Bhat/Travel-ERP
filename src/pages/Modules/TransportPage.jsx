@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import MainLayout from '../../components/Layout/MainLayout';
 import GlassCard from '../../components/Common/GlassCard';
 import Button from '../../components/Common/Button';
@@ -6,12 +7,18 @@ import Input from '../../components/Common/Input';
 import Badge from '../../components/Common/Badge';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import supabase from '../../lib/supabase';
+import api from '../../lib/api';
 import {
   MdAdd, MdDirectionsBus, MdPerson, MdEdit, MdDelete,
   MdClose, MdPhone, MdSearch, MdLocationOn, MdToggleOn, MdToggleOff,
 } from 'react-icons/md';
 import { formatDate } from '../../utils/helpers';
+
+/** Stops come back as `{ name }` objects; older rows are bare strings. */
+function stopLabel(stop) {
+  if (!stop) return '';
+  return typeof stop === 'string' ? stop : (stop.name || '');
+}
 
 export default function TransportPage() {
   const { profile } = useAuth();
@@ -46,27 +53,40 @@ export default function TransportPage() {
   const loadRoutes = async () => {
     if (!profile?.institution_id) return;
     setRoutesLoading(true);
-    const { data, error } = await supabase
-      .from('transport_routes')
-      .select('*, student_routes(id)')
-      .eq('institution_id', profile.institution_id)
-      .order('route_name');
-    if (error) notification.error('Failed to load routes');
-    else setRoutes(data || []);
-    setRoutesLoading(false);
+    try {
+      const { data } = await api.get('/transport/routes');
+      setRoutes(data || []);
+    } catch (err) {
+      notification.error(err.response?.data?.error || 'Failed to load routes');
+    } finally {
+      setRoutesLoading(false);
+    }
   };
 
   // ─── Load students assigned to route ──────────────────────────────
   const loadAssignedStudents = async (routeId) => {
     if (!routeId) { setAssignedStudents([]); return; }
     setAssignLoading(true);
-    const { data, error } = await supabase
-      .from('student_routes')
-      .select('*, students(first_name,last_name,admission_no,class_name)')
-      .eq('route_id', routeId);
-    if (error) notification.error('Failed to load assigned students');
-    else setAssignedStudents(data || []);
-    setAssignLoading(false);
+    try {
+      const { data } = await api.get(`/transport/routes/${routeId}`);
+      // The API returns the student's columns flat alongside the assignment
+      // id; this screen renders them from a nested `students` object.
+      setAssignedStudents((data?.students || []).map((row) => ({
+        id: row.assignment_id,
+        student_id: row.id,
+        pickup_stop: row.pickup_stop,
+        students: {
+          first_name: row.first_name,
+          last_name: row.last_name,
+          admission_no: row.admission_no,
+          class_name: row.class_name,
+        },
+      })));
+    } catch (err) {
+      notification.error(err.response?.data?.error || 'Failed to load assigned students');
+    } finally {
+      setAssignLoading(false);
+    }
   };
 
   useEffect(() => { if (profile) loadRoutes(); }, [profile]);
@@ -85,7 +105,7 @@ export default function TransportPage() {
         driver_phone: route.driver_phone || '',
         vehicle_no: route.vehicle_no || '',
         capacity: route.capacity || '',
-        stops: route.stops || [],
+        stops: (route.stops || []).map(stopLabel).filter(Boolean),
       });
     } else {
       setEditingRoute(null);
@@ -110,72 +130,60 @@ export default function TransportPage() {
     if (!routeForm.route_name.trim()) { notification.error('Route name is required'); return; }
     setRouteSaving(true);
 
+    // institution_id comes from the session server-side; sending it here
+    // would only be ignored by the validator.
     const payload = {
-      institution_id: profile.institution_id,
       route_name: routeForm.route_name.trim(),
       driver_name: routeForm.driver_name.trim(),
       driver_phone: routeForm.driver_phone.trim(),
       vehicle_no: routeForm.vehicle_no.trim(),
-      capacity: parseInt(routeForm.capacity) || 0,
+      capacity: parseInt(routeForm.capacity, 10) || 0,
       stops: routeForm.stops,
-      is_active: editingRoute ? editingRoute.is_active : true,
+      is_active: editingRoute ? Boolean(editingRoute.is_active) : true,
     };
 
-    let error, data;
-    if (editingRoute) {
-      ({ data, error } = await supabase
-        .from('transport_routes')
-        .update(payload)
-        .eq('id', editingRoute.id)
-        .select('*, student_routes(id)')
-        .single());
-    } else {
-      ({ data, error } = await supabase
-        .from('transport_routes')
-        .insert([payload])
-        .select('*, student_routes(id)')
-        .single());
-    }
+    try {
+      const response = editingRoute
+        ? await api.put(`/transport/routes/${editingRoute.id}`, payload)
+        : await api.post('/transport/routes', payload);
+      const saved = response.data;
 
-    if (error) {
-      notification.error('Failed to save route');
-    } else {
       if (editingRoute) {
-        setRoutes(prev => prev.map(r => r.id === data.id ? data : r));
+        setRoutes(prev => prev.map(r => (r.id === saved.id ? saved : r)));
         notification.success('Route updated!');
       } else {
-        setRoutes(prev => [...prev, data]);
+        setRoutes(prev => [...prev, saved]);
         notification.success('Route created!');
       }
       setShowRouteModal(false);
+    } catch (err) {
+      notification.error(err.response?.data?.error || 'Failed to save route');
+    } finally {
+      setRouteSaving(false);
     }
-    setRouteSaving(false);
   };
 
   // ─── Toggle route active ───────────────────────────────────────────
   const handleToggleActive = async (route) => {
-    const { data, error } = await supabase
-      .from('transport_routes')
-      .update({ is_active: !route.is_active })
-      .eq('id', route.id)
-      .select('*, student_routes(id)')
-      .single();
-    if (error) notification.error('Failed to update status');
-    else {
-      setRoutes(prev => prev.map(r => r.id === data.id ? data : r));
+    try {
+      const { data } = await api.put(`/transport/routes/${route.id}`, { is_active: !route.is_active });
+      setRoutes(prev => prev.map(r => (r.id === data.id ? data : r)));
       notification.success(`Route ${data.is_active ? 'activated' : 'deactivated'}`);
+    } catch (err) {
+      notification.error(err.response?.data?.error || 'Failed to update status');
     }
   };
 
   // ─── Delete route ──────────────────────────────────────────────────
   const handleDeleteRoute = async (route) => {
     if (!window.confirm(`Delete route "${route.route_name}"?`)) return;
-    const { error } = await supabase.from('transport_routes').delete().eq('id', route.id);
-    if (error) notification.error('Failed to delete route');
-    else {
+    try {
+      await api.delete(`/transport/routes/${route.id}`);
       setRoutes(prev => prev.filter(r => r.id !== route.id));
       if (selectedRouteId === route.id) { setSelectedRouteId(''); setAssignedStudents([]); }
       notification.success('Route deleted');
+    } catch (err) {
+      notification.error(err.response?.data?.error || 'Failed to delete route');
     }
   };
 
@@ -184,15 +192,13 @@ export default function TransportPage() {
     setStudentSearch(val);
     setSelectedStudent(null);
     if (!val.trim() || val.length < 2) { setStudentResults([]); return; }
-    const { data } = await supabase
-      .from('students')
-      .select('id, first_name, last_name, admission_no, class_name')
-      .eq('institution_id', profile.institution_id)
-      .or(`first_name.ilike.%${val}%,last_name.ilike.%${val}%,admission_no.ilike.%${val}%`)
-      .limit(8);
-    // Filter already assigned
-    const assignedIds = assignedStudents.map(a => a.student_id);
-    setStudentResults((data || []).filter(s => !assignedIds.includes(s.id)));
+    try {
+      const { data } = await api.get('/students', { params: { search: val, pageSize: 8, page: 1 } });
+      const assignedIds = assignedStudents.map(a => a.student_id);
+      setStudentResults((data?.data || []).filter(s => !assignedIds.includes(s.id)));
+    } catch {
+      setStudentResults([]);
+    }
   };
 
   // ─── Assign student to route ───────────────────────────────────────
@@ -200,43 +206,56 @@ export default function TransportPage() {
     if (!selectedStudent) { notification.error('Please select a student'); return; }
     if (!selectedStop) { notification.error('Please select a pickup stop'); return; }
     setAssignSaving(true);
-    const { data, error } = await supabase
-      .from('student_routes')
-      .insert([{ route_id: selectedRouteId, student_id: selectedStudent.id, pickup_stop: selectedStop }])
-      .select('*, students(first_name,last_name,admission_no,class_name)')
-      .single();
-    if (error) {
-      notification.error('Failed to assign student');
-    } else {
-      setAssignedStudents(prev => [...prev, data]);
-      // Update student count on route
-      setRoutes(prev => prev.map(r =>
+    try {
+      const { data } = await api.post(`/transport/routes/${selectedRouteId}/students`, {
+        student_id: selectedStudent.id,
+        pickup_stop: selectedStop,
+      });
+
+      setAssignedStudents(prev => [...prev, {
+        id: data.id,
+        student_id: selectedStudent.id,
+        pickup_stop: selectedStop,
+        students: {
+          first_name: selectedStudent.first_name,
+          last_name: selectedStudent.last_name,
+          admission_no: selectedStudent.admission_no,
+          class_name: selectedStudent.class_name,
+        },
+      }]);
+
+      setRoutes(prev => prev.map(r => (
         r.id === selectedRouteId
-          ? { ...r, student_routes: [...(r.student_routes || []), { id: data.id }] }
+          ? { ...r, assigned_count: (Number(r.assigned_count) || 0) + 1 }
           : r
-      ));
+      )));
+
       setSelectedStudent(null);
       setStudentSearch('');
       setStudentResults([]);
       setSelectedStop('');
       setShowAssignModal(false);
       notification.success('Student assigned!');
+    } catch (err) {
+      notification.error(err.response?.data?.error || 'Failed to assign student');
+    } finally {
+      setAssignSaving(false);
     }
-    setAssignSaving(false);
   };
 
   // ─── Remove student from route ─────────────────────────────────────
   const handleRemoveStudentFromRoute = async (assignment) => {
-    const { error } = await supabase.from('student_routes').delete().eq('id', assignment.id);
-    if (error) notification.error('Failed to remove student');
-    else {
+    try {
+      await api.delete(`/transport/assignments/${assignment.id}`);
       setAssignedStudents(prev => prev.filter(a => a.id !== assignment.id));
-      setRoutes(prev => prev.map(r =>
+      setRoutes(prev => prev.map(r => (
         r.id === selectedRouteId
-          ? { ...r, student_routes: (r.student_routes || []).filter(s => s.id !== assignment.id) }
+          ? { ...r, assigned_count: Math.max(0, (Number(r.assigned_count) || 0) - 1) }
           : r
-      ));
+      )));
       notification.success('Student removed from route');
+    } catch (err) {
+      notification.error(err.response?.data?.error || 'Failed to remove student');
     }
   };
 
@@ -283,7 +302,7 @@ export default function TransportPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                 {routes.map(route => {
-                  const studentCount = (route.student_routes || []).length;
+                  const studentCount = Number(route.assigned_count) || 0;
                   const capacity = route.capacity || 1;
                   const occupancy = Math.min(100, Math.round((studentCount / capacity) * 100));
                   return (
@@ -343,7 +362,7 @@ export default function TransportPage() {
                           <div className="flex flex-wrap gap-1">
                             {route.stops.slice(0, 4).map((stop, i) => (
                               <span key={i} className="px-1.5 py-0.5 text-xs bg-white/5 text-white/50 rounded">
-                                {stop}
+                                {stopLabel(stop)}
                               </span>
                             ))}
                             {route.stops.length > 4 && (
@@ -480,7 +499,11 @@ export default function TransportPage() {
         )}
 
         {/* ─── ADD/EDIT ROUTE MODAL ───────────────────────────────────── */}
-        {showRouteModal && (
+        {/* Portalled to <body>: MainLayout's ancestors set `perspective` and
+            `will-change: transform` for the 3D shell, which gives fixed-
+            position descendants a new containing block instead of the
+            viewport — an in-place backdrop here would land off-screen. */}
+        {showRouteModal && createPortal(
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <GlassCard className="w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
@@ -549,7 +572,7 @@ export default function TransportPage() {
                       {routeForm.stops.map((stop, i) => (
                         <span key={i} className="flex items-center gap-1 px-2 py-1 bg-white/10 text-white/80 text-xs rounded-full">
                           <MdLocationOn className="w-3 h-3 text-neon-cyan" />
-                          {stop}
+                          {stopLabel(stop)}
                           <button onClick={() => handleRemoveStop(i)} className="text-white/40 hover:text-white ml-0.5">
                             <MdClose className="w-3 h-3" />
                           </button>
@@ -567,11 +590,12 @@ export default function TransportPage() {
                 <Button variant="secondary" onClick={() => setShowRouteModal(false)}>Cancel</Button>
               </div>
             </GlassCard>
-          </div>
+          </div>,
+          document.body
         )}
 
         {/* ─── ASSIGN STUDENT MODAL ───────────────────────────────────── */}
-        {showAssignModal && (
+        {showAssignModal && createPortal(
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <GlassCard className="w-full max-w-md p-6">
               <div className="flex justify-between items-center mb-4">
@@ -637,7 +661,7 @@ export default function TransportPage() {
                 >
                   <option value="">-- Select pickup stop --</option>
                   {(selectedRouteObj?.stops || []).map((stop, i) => (
-                    <option key={i} value={stop}>{stop}</option>
+                    <option key={i} value={stopLabel(stop)}>{stopLabel(stop)}</option>
                   ))}
                 </select>
               </div>
@@ -649,7 +673,8 @@ export default function TransportPage() {
                 <Button variant="secondary" onClick={() => setShowAssignModal(false)}>Cancel</Button>
               </div>
             </GlassCard>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     </MainLayout>

@@ -1,101 +1,75 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { MdLock, MdErrorOutline } from 'react-icons/md';
-import supabase from '../../lib/supabase';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { MdLock, MdErrorOutline, MdVpnKey } from 'react-icons/md';
+import api from '../../lib/api';
 import AuthLayout from '../../components/Layout/AuthLayout';
 import Input from '../../components/Common/Input';
 import Button from '../../components/Common/Button';
 import { useNotification } from '../../hooks/useNotification';
 
-// Landed on from the Supabase recovery email. supabase-js exchanges the
-// token in the URL for a session automatically; we wait for it, then let
-// the user set a new password.
+/**
+ * Set a new password from a reset token.
+ *
+ * Ported off Supabase Auth: the token arrives as `?token=` and is redeemed
+ * against the backend, which validates the hash and its expiry.
+ */
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
   const notification = useNotification();
-  const [checking, setChecking] = useState(true);
-  const [hasSession, setHasSession] = useState(false);
+  const [searchParams] = useSearchParams();
+
+  const [token, setToken] = useState('');
   const [form, setForm] = useState({ password: '', confirm: '' });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
+    const fromUrl = searchParams.get('token');
+    if (fromUrl) setToken(fromUrl);
+  }, [searchParams]);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if ((event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') && session && !cancelled) {
-        setHasSession(true);
-        setChecking(false);
-      }
-    });
+  const handleSubmit = async (event) => {
+    event.preventDefault();
 
-    // The token exchange may already be done by the time we mount
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (cancelled) return;
-      if (session) {
-        setHasSession(true);
-        setChecking(false);
-      } else {
-        // Give the URL token exchange a moment before declaring the link dead
-        setTimeout(() => {
-          if (!cancelled) setChecking(false);
-        }, 2500);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      subscription?.unsubscribe();
-    };
-  }, []);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
     const nextErrors = {};
-    if (form.password.length < 6) nextErrors.password = 'Minimum 6 characters';
+    if (!token.trim()) nextErrors.token = 'Paste the reset token from your email';
+    if (form.password.length < 8) nextErrors.password = 'Minimum 8 characters';
+    else if (!/[a-zA-Z]/.test(form.password) || !/\d/.test(form.password)) {
+      nextErrors.password = 'Include at least one letter and one number';
+    }
     if (form.confirm !== form.password) nextErrors.confirm = 'Passwords do not match';
+
     setErrors(nextErrors);
-    if (Object.keys(nextErrors).length) return;
+    if (Object.keys(nextErrors).length > 0) return;
 
     setSaving(true);
-    const { error } = await supabase.auth.updateUser({ password: form.password });
-    setSaving(false);
-    if (error) {
-      notification.error(error.message);
-      setErrors({ form: error.message });
-    } else {
-      notification.success('Password updated. You are signed in.');
-      navigate('/dashboard');
+    try {
+      await api.post('/auth/reset-password', { token: token.trim(), newPassword: form.password });
+      setDone(true);
+      notification.success('Password updated. Sign in with your new password.');
+      setTimeout(() => navigate('/login'), 1600);
+    } catch (err) {
+      const message = err.response?.data?.error || err.message;
+      notification.error(message);
+      setErrors({ form: message });
+    } finally {
+      setSaving(false);
     }
   };
 
-  if (checking) {
+  if (done) {
     return (
       <AuthLayout>
-        <div className="py-12 flex flex-col items-center gap-4">
-          <div className="spinner" />
-          <p className="text-sm text-slate-500 mb-0">Verifying your reset link...</p>
-        </div>
-      </AuthLayout>
-    );
-  }
-
-  if (!hasSession) {
-    return (
-      <AuthLayout>
-        <div className="text-center py-4">
-          <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
-            <MdErrorOutline className="w-7 h-7 text-red-500" />
-          </div>
-          <h2 className="text-2xl font-bold text-slate-950 font-display mb-2">Link expired</h2>
-          <p className="text-slate-500 text-sm mb-6">
-            This password reset link is invalid or has expired. Request a new one and try again.
+        <div className="text-center py-6">
+          <h2 className="text-2xl font-bold font-display mb-2" style={{ color: 'var(--neu-ink)' }}>
+            Password updated
+          </h2>
+          <p className="text-sm mb-6" style={{ color: 'var(--neu-ink-muted)' }}>
+            Taking you to the sign-in page…
           </p>
-          <Link to="/forgot-password">
-            <Button variant="primary" className="w-full" type="button">
-              Request new link
-            </Button>
+          <Link to="/login">
+            <Button variant="primary" fullWidth type="button">Sign in now</Button>
           </Link>
         </div>
       </AuthLayout>
@@ -106,34 +80,54 @@ export default function ResetPasswordPage() {
     <AuthLayout>
       <form onSubmit={handleSubmit} className="space-y-5">
         <div>
-          <h2 className="text-2xl font-bold text-slate-950 font-display">Set a new password</h2>
-          <p className="text-slate-500 text-sm mt-1">Choose a strong password for your account.</p>
+          <h2 className="text-2xl font-bold font-display" style={{ color: 'var(--neu-ink)' }}>
+            Set a new password
+          </h2>
+          <p className="text-sm mt-1" style={{ color: 'var(--neu-ink-muted)' }}>
+            Choose a strong password for your account.
+          </p>
         </div>
 
         {errors.form && (
-          <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-            <span className="font-bold">!</span> {errors.form}
+          <div className="neu-alert neu-alert-error">
+            <MdErrorOutline className="w-5 h-5 shrink-0" style={{ color: 'var(--neu-danger)' }} />
+            <span>{errors.form}</span>
           </div>
         )}
 
         <div className="space-y-4">
+          {!searchParams.get('token') && (
+            <Input
+              name="token"
+              label="Reset token"
+              placeholder="Paste the token from your reset email"
+              value={token}
+              onChange={(event) => { setToken(event.target.value); setErrors({}); }}
+              error={errors.token}
+              leftIcon={MdVpnKey}
+              wrapperClass="mb-0"
+            />
+          )}
+
           <Input
             name="password"
             type="password"
             placeholder="New password"
             value={form.password}
-            onChange={(e) => { setForm(f => ({ ...f, password: e.target.value })); setErrors({}); }}
+            onChange={(event) => { setForm((f) => ({ ...f, password: event.target.value })); setErrors({}); }}
             error={errors.password}
+            hint="At least 8 characters, with a letter and a number."
             leftIcon={MdLock}
             wrapperClass="mb-0"
             autoComplete="new-password"
           />
+
           <Input
             name="confirm"
             type="password"
             placeholder="Confirm new password"
             value={form.confirm}
-            onChange={(e) => { setForm(f => ({ ...f, confirm: e.target.value })); setErrors({}); }}
+            onChange={(event) => { setForm((f) => ({ ...f, confirm: event.target.value })); setErrors({}); }}
             error={errors.confirm}
             leftIcon={MdLock}
             wrapperClass="mb-0"
@@ -141,9 +135,16 @@ export default function ResetPasswordPage() {
           />
         </div>
 
-        <Button type="submit" variant="primary" loading={saving} disabled={saving} className="w-full" size="lg">
+        <Button type="submit" variant="primary" loading={saving} disabled={saving} fullWidth size="lg">
           Update password
         </Button>
+
+        <p className="text-center text-sm mb-0" style={{ color: 'var(--neu-ink-muted)' }}>
+          Link expired?{' '}
+          <Link to="/forgot-password" className="font-semibold" style={{ color: 'var(--neu-primary)' }}>
+            Request a new one
+          </Link>
+        </p>
       </form>
     </AuthLayout>
   );

@@ -1,28 +1,23 @@
-import supabase from './supabase';
-import { API_BASE_URL } from '../config';
+import api, { getToken } from './api';
 
-async function getAccessToken() {
-  const { data, error } = await supabase.auth.getSession();
-  if (error) throw error;
-  return data?.session?.access_token;
-}
-
+/**
+ * Feature-usage telemetry.
+ *
+ * Fire-and-forget: a failed beacon must never surface to the user or block
+ * a page render, so every error is swallowed.
+ */
 export async function trackFeatureUsage(featureKey, eventType = 'view', metadata = {}) {
-  const token = await getAccessToken();
-  if (!token || !featureKey) return null;
+  if (!featureKey || !getToken()) return null;
 
-  const response = await fetch(`${API_BASE_URL}/usage/track`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ featureKey, eventType, metadata }),
-  });
-
-  if (!response.ok) {
+  try {
+    const response = await api.post('/usage/track', { featureKey, eventType, metadata });
+    return response.data;
+  } catch {
     return null;
   }
+}
 
-  return response.json();
+export async function fetchUsageSummary() {
+  const response = await api.get('/usage/summary');
+  return response.data;
 }

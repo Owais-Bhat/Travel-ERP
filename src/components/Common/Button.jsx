@@ -1,22 +1,25 @@
 import { MdLoop } from 'react-icons/md';
 
+/**
+ * Neumorphic button.
+ *
+ * Raised at rest, lifts on hover, presses *into* the material on click —
+ * the press state is the whole point of soft UI, so it is handled in CSS
+ * (`:active`) rather than JS to stay in sync with real pointer timing.
+ */
 const VARIANTS = {
-  primary: 'btn-primary focus:ring-2 focus:ring-teal-700/30 focus:ring-offset-2 focus:ring-offset-transparent',
-  secondary: 'btn-secondary focus:ring-2 focus:ring-slate-300 focus:ring-offset-2 focus:ring-offset-transparent',
-  danger: 'btn-danger focus:ring-2 focus:ring-red-500/40 focus:ring-offset-2 focus:ring-offset-transparent',
-  ghost: `bg-transparent text-slate-600 hover:text-slate-950 hover:bg-slate-100
-          border border-transparent hover:border-slate-200
-          rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-200
-          focus:outline-none focus:ring-2 focus:ring-slate-300`,
-  icon: `p-2 rounded-lg text-slate-500 hover:text-slate-950 hover:bg-slate-100 transition-all
-         focus:outline-none focus:ring-2 focus:ring-slate-300`,
+  primary: 'neu-btn neu-btn-primary',
+  secondary: 'neu-btn',
+  danger: 'neu-btn neu-btn-danger',
+  ghost: 'neu-btn neu-btn-ghost',
+  icon: 'neu-btn neu-btn-ghost neu-btn-icon',
 };
 
 const SIZES = {
-  xs: 'btn-sm !py-1.5 !px-3 !text-xs',
-  sm: 'btn-sm',
+  xs: 'neu-btn-xs',
+  sm: 'neu-btn-sm',
   md: '',
-  lg: 'btn-lg',
+  lg: 'neu-btn-lg',
 };
 
 export default function Button({
@@ -27,6 +30,7 @@ export default function Button({
   disabled = false,
   icon: Icon,
   iconRight,
+  fullWidth = false,
   className = '',
   ...props
 }) {
@@ -34,21 +38,23 @@ export default function Button({
 
   return (
     <button
-      className={`
-        ${VARIANTS[variant] || VARIANTS.primary}
-        ${SIZES[size] || ''}
-        ${disabled || loading ? 'opacity-50 cursor-not-allowed' : ''}
-        inline-flex items-center justify-center gap-2
-        ${className}
-      `}
+      className={[
+        VARIANTS[variant] || VARIANTS.primary,
+        SIZES[size] || '',
+        fullWidth ? 'w-full' : '',
+        className,
+      ].filter(Boolean).join(' ')}
       disabled={disabled || loading}
       {...props}
     >
       {loading
-        ? <MdLoop className="w-4 h-4 animate-spin shrink-0" />
+        ? <span className="neu-spinner shrink-0" aria-hidden="true" />
         : Icon ? <Icon className="w-4 h-4 shrink-0" /> : null}
       {children}
       {IconRight && !loading && <IconRight className="w-4 h-4 shrink-0" />}
+      {loading && <span className="sr-only">Loading</span>}
     </button>
   );
 }
+
+export { MdLoop };

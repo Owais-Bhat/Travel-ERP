@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import MainLayout from '../../components/Layout/MainLayout';
 import GlassCard from '../../components/Common/GlassCard';
 import Button from '../../components/Common/Button';
 import Input from '../../components/Common/Input';
+import api from '../../lib/api';
 import { useAppData } from '../../hooks/useAppData';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import supabase from '../../lib/supabase';
 import { formatDate } from '../../utils/helpers';
 import {
   MdAdd,
@@ -62,7 +63,11 @@ function StatusBadge({ status }) {
 }
 
 function Modal({ title, onClose, children, maxWidth = 'max-w-2xl' }) {
-  return (
+  // Portalled to <body>: MainLayout's ancestors set `perspective` and
+  // `will-change: transform` for the 3D shell, which gives fixed-position
+  // descendants a new containing block instead of the viewport — an
+  // in-place backdrop here would land off-screen.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className={`relative z-10 w-full ${maxWidth} max-h-[90vh] overflow-y-auto glass-card rounded-xl p-6 shadow-2xl`}>
@@ -77,7 +82,8 @@ function Modal({ title, onClose, children, maxWidth = 'max-w-2xl' }) {
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -191,7 +197,7 @@ function ProcessDropdown({ admission, onAction }) {
 }
 
 export default function AdmissionsPage() {
-  const { admissions, loadAdmissions, addAdmission, updateAdmission } = useAppData();
+  const { admissions, loadAdmissions, addAdmission, updateAdmission, loadStudents } = useAppData();
   const { profile } = useAuth();
   const notification = useNotification();
 
@@ -211,19 +217,7 @@ export default function AdmissionsPage() {
       setPageLoading(true);
       setPageError(null);
       try {
-        if (typeof loadAdmissions === 'function') {
-          await loadAdmissions(profile?.institution_id);
-        } else {
-          // Fallback: load directly if context doesn't have it
-          const { data, error } = await supabase
-            .from('admissions')
-            .select('*')
-            .eq('institution_id', profile?.institution_id)
-            .order('applied_at', { ascending: false });
-          if (error) throw error;
-          // admissions will remain empty if context method is absent
-          // This scenario is handled gracefully below
-        }
+        await loadAdmissions();
       } catch (err) {
         setPageError(err.message || 'Failed to load admissions');
       } finally {
@@ -233,32 +227,9 @@ export default function AdmissionsPage() {
     if (profile?.institution_id) load();
   }, [profile?.institution_id]);
 
-  // Local admissions state when context doesn't provide the list
-  const [localAdmissions, setLocalAdmissions] = useState(null);
-
-  // On mount, also fetch directly to ensure we always have data
-  useEffect(() => {
-    const fetchDirect = async () => {
-      if (!profile?.institution_id) return;
-      try {
-        const { data, error } = await supabase
-          .from('admissions')
-          .select('*')
-          .eq('institution_id', profile.institution_id)
-          .order('applied_at', { ascending: false });
-        if (error) throw error;
-        setLocalAdmissions(data || []);
-      } catch (err) {
-        // Don't override pageError here — context load handles that
-      }
-    };
-    fetchDirect();
-  }, [profile?.institution_id]);
-
-  // Use context admissions if populated, else local
-  const allAdmissions = (admissions && admissions.length > 0)
-    ? admissions
-    : (localAdmissions || []);
+  // The context loader is the single source of truth; the old duplicate
+  // direct-fetch fallback went through Supabase and no longer exists.
+  const allAdmissions = admissions || [];
 
   const filteredAdmissions = activeTab === 'all'
     ? allAdmissions
@@ -287,16 +258,11 @@ export default function AdmissionsPage() {
   const refreshAdmissions = useCallback(async () => {
     if (!profile?.institution_id) return;
     try {
-      const { data, error } = await supabase
-        .from('admissions')
-        .select('*')
-        .eq('institution_id', profile.institution_id)
-        .order('applied_at', { ascending: false });
-      if (error) throw error;
-      setLocalAdmissions(data || []);
+      await loadAdmissions();
     } catch (err) {
       notification.error(err.message || 'Failed to refresh admissions');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.institution_id]);
 
   const handleSaveApplication = async () => {
@@ -307,20 +273,10 @@ export default function AdmissionsPage() {
     }
     setSaving(true);
     try {
-      const payload = {
-        ...form,
-        institution_id: profile.institution_id,
-        status: 'pending',
-        applied_at: new Date().toISOString(),
-      };
-      // Try context method first, fall back to direct insert
-      if (typeof addAdmission === 'function') {
-        const result = await addAdmission(payload);
-        if (result?.success === false) throw new Error(result.error || 'Failed to add application');
-      } else {
-        const { error } = await supabase.from('admissions').insert([payload]);
-        if (error) throw error;
-      }
+      // institution_id and status come from the server; sending them here
+      // would just be ignored by the validator.
+      const result = await addAdmission(form);
+      if (result?.success === false) throw new Error(result.error || 'Failed to add application');
       await refreshAdmissions();
       notification.success('Application submitted successfully');
       setShowAddModal(false);
@@ -337,59 +293,23 @@ export default function AdmissionsPage() {
     if (!admission) return;
 
     try {
-      if (action === 'approve') {
-        const payload = { status: 'approved', remarks: remarks || null };
-        if (typeof updateAdmission === 'function') {
-          const result = await updateAdmission(admissionId, payload);
-          if (result?.success === false) throw new Error(result.error);
-        } else {
-          const { error } = await supabase
-            .from('admissions').update(payload).eq('id', admissionId);
-          if (error) throw error;
-        }
+      if (action === 'approve' || action === 'reject') {
+        const result = await updateAdmission(admissionId, {
+          status: action === 'approve' ? 'approved' : 'rejected',
+          remarks: remarks || null,
+        });
+        if (result?.success === false) throw new Error(result.error);
         await refreshAdmissions();
-        notification.success('Application approved');
-      } else if (action === 'reject') {
-        const payload = { status: 'rejected', remarks: remarks || null };
-        if (typeof updateAdmission === 'function') {
-          const result = await updateAdmission(admissionId, payload);
-          if (result?.success === false) throw new Error(result.error);
-        } else {
-          const { error } = await supabase
-            .from('admissions').update(payload).eq('id', admissionId);
-          if (error) throw error;
-        }
-        await refreshAdmissions();
-        notification.success('Application rejected');
+        notification.success(action === 'approve' ? 'Application approved' : 'Application rejected');
       } else if (action === 'enroll') {
-        // Step 1: Insert student record from admission data
-        const studentPayload = {
-          institution_id: profile.institution_id,
-          admission_no: `ADM${Date.now()}`,
-          first_name: admission.applicant_name.split(' ')[0] || admission.applicant_name,
-          last_name: admission.applicant_name.split(' ').slice(1).join(' ') || '',
-          email: admission.email || null,
-          phone: admission.phone || null,
-          dob: admission.dob || null,
-          class_name: admission.class_applying || null,
-          parent_name: admission.parent_name || null,
-          parent_phone: admission.parent_phone || null,
-          address: admission.address || null,
-          status: 'active',
-        };
-        const { error: studentError } = await supabase
-          .from('students')
-          .insert([studentPayload]);
-        if (studentError) throw studentError;
-
-        // Step 2: Update admission status to enrolled
-        const { error: admError } = await supabase
-          .from('admissions')
-          .update({ status: 'enrolled', remarks: 'Converted to student record' })
-          .eq('id', admissionId);
-        if (admError) throw admError;
-
+        // One server-side transaction creates the student, links it back to
+        // the application, moves any collected documents across and fills a
+        // program seat — the old two-step client version could half-apply.
+        await api.post(`/admissions/${admissionId}/enrol`, {
+          class_name: admission.class_applying || undefined,
+        });
         await refreshAdmissions();
+        await loadStudents();
         notification.success(`${admission.applicant_name} enrolled as a student successfully`);
       }
     } catch (err) {

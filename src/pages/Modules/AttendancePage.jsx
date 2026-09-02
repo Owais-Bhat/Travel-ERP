@@ -161,11 +161,14 @@ export default function AttendancePage() {
     try {
       const thirtyDaysAgo = toDateStr(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
       const { data } = await api.get('/attendance/range', { params: { from: thirtyDaysAgo, to: TODAY } });
+      // The endpoint returns one row per (date, status) with a count, rather
+      // than one row per student — a 30-day range is thousands of records.
       const grouped = {};
       (data || []).forEach((rec) => {
+        const count = Number(rec.total) || 0;
         if (!grouped[rec.date]) grouped[rec.date] = { present: 0, total: 0 };
-        grouped[rec.date].total += 1;
-        if (rec.status === 'present') grouped[rec.date].present += 1;
+        grouped[rec.date].total += count;
+        if (rec.status === 'present') grouped[rec.date].present += count;
       });
       setMonthlyData(grouped);
     } catch (err) {

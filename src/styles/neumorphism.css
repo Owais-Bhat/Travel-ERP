@@ -1,0 +1,934 @@
+/* ============================================================
+   CyberMilo — Neumorphic design system
+   ------------------------------------------------------------
+   Everything is extruded from a single canvas colour using a
+   paired light/shadow. That is the whole trick of soft UI: there
+   is no "card colour", only light falling on one material.
+
+   Light source is fixed top-left, so every raised element casts
+   down-right and catches light up-left. Inset elements invert it.
+
+   Legacy `.glass-*` class names are kept as aliases at the bottom
+   so the pages written against the old system restyle in place.
+   ============================================================ */
+
+:root {
+  /* --- canvas + light -------------------------------------- */
+  --neu-bg: #e7ebf3;
+  --neu-bg-deep: #dfe4ee;
+  --neu-light: #ffffff;
+  --neu-shadow: #b9c2d4;
+  --neu-shadow-soft: rgba(160, 172, 194, 0.55);
+
+  /* --- ink -------------------------------------------------- */
+  --neu-ink: #1b2333;
+  --neu-ink-soft: #4a566d;
+  --neu-ink-muted: #7c889e;
+  --neu-line: rgba(146, 158, 182, 0.28);
+
+  /* --- accents ---------------------------------------------- */
+  --neu-primary: #4059ad;
+  --neu-primary-ink: #ffffff;
+  --neu-teal: #0e7c7b;
+  --neu-coral: #e0644a;
+  --neu-amber: #cf8b1f;
+  --neu-violet: #6f5bd7;
+  --neu-success: #16845d;
+  --neu-danger: #c9453e;
+
+  /* --- elevation -------------------------------------------- */
+  --neu-e1: 3px 3px 7px var(--neu-shadow), -3px -3px 7px var(--neu-light);
+  --neu-e2: 6px 6px 14px var(--neu-shadow), -6px -6px 14px var(--neu-light);
+  --neu-e3: 11px 11px 26px var(--neu-shadow), -9px -9px 22px var(--neu-light);
+  --neu-e4: 18px 18px 40px var(--neu-shadow), -12px -12px 30px var(--neu-light);
+  --neu-inset: inset 4px 4px 9px var(--neu-shadow), inset -4px -4px 9px var(--neu-light);
+  --neu-inset-deep: inset 6px 6px 12px var(--neu-shadow), inset -5px -5px 11px var(--neu-light);
+  --neu-inset-subtle: inset 2px 2px 5px var(--neu-shadow), inset -2px -2px 5px var(--neu-light);
+
+  /* --- geometry --------------------------------------------- */
+  --neu-radius-sm: 10px;
+  --neu-radius: 16px;
+  --neu-radius-lg: 22px;
+  --neu-radius-xl: 30px;
+
+  /* --- motion ----------------------------------------------- */
+  --neu-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --neu-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --neu-fast: 160ms;
+  --neu-base: 260ms;
+  --neu-slow: 420ms;
+
+  /* --- depth ------------------------------------------------ */
+  --neu-perspective: 1200px;
+}
+
+[data-theme='dark'] {
+  --neu-bg: #23262f;
+  --neu-bg-deep: #1d2029;
+  --neu-light: #2e323e;
+  --neu-shadow: #16181f;
+  --neu-shadow-soft: rgba(10, 12, 16, 0.6);
+
+  --neu-ink: #e8ecf4;
+  --neu-ink-soft: #b3bccd;
+  --neu-ink-muted: #7f8a9e;
+  --neu-line: rgba(140, 152, 176, 0.16);
+
+  --neu-primary: #7d92e8;
+  --neu-primary-ink: #10131b;
+  --neu-teal: #3fb5b3;
+  --neu-coral: #f0836b;
+  --neu-amber: #e8ae4a;
+  --neu-violet: #9b8bf0;
+  --neu-success: #45c79a;
+  --neu-danger: #ef6f68;
+}
+
+/* ============================================================
+   Canvas
+   ============================================================ */
+body {
+  background: var(--neu-bg);
+  color: var(--neu-ink);
+}
+
+/* Two very soft radial pools give the flat canvas somewhere for
+   the eye to rest without breaking the single-material illusion. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(60rem 40rem at 12% -10%, rgba(64, 89, 173, 0.07), transparent 60%),
+    radial-gradient(50rem 36rem at 105% 108%, rgba(224, 100, 74, 0.06), transparent 62%);
+}
+
+/* ============================================================
+   Responsive visibility
+   ------------------------------------------------------------
+   Tailwind's display utilities are not dependable in this project:
+   this stylesheet loads after Tailwind, so any component rule that
+   sets `display` beats `lg:hidden`; and Tailwind 4 emits `.hidden`
+   after the responsive variants, so `hidden md:flex` never becomes
+   visible either. These are explicit and always win.
+
+     .from-md   visible from 768px up      (hidden below)
+     .upto-md   visible below 768px        (hidden from 768px up)
+
+   Pair the "from-" classes with a display utility for the visible
+   state, e.g. `class="from-md flex"`.
+   ============================================================ */
+@media (max-width: 639.98px)  { .from-sm { display: none !important; } }
+@media (min-width: 640px)     { .upto-sm { display: none !important; } }
+@media (max-width: 767.98px)  { .from-md { display: none !important; } }
+@media (min-width: 768px)     { .upto-md { display: none !important; } }
+@media (max-width: 1023.98px) { .from-lg { display: none !important; } }
+@media (min-width: 1024px)    { .upto-lg { display: none !important; } }
+
+/* ============================================================
+   Surfaces
+   ============================================================ */
+.neu-surface,
+.neu-raised {
+  background: var(--neu-bg);
+  border-radius: var(--neu-radius);
+  box-shadow: var(--neu-e2);
+  transition:
+    box-shadow var(--neu-base) var(--neu-ease),
+    transform var(--neu-base) var(--neu-ease);
+}
+
+.neu-flat {
+  background: var(--neu-bg);
+  border-radius: var(--neu-radius);
+  box-shadow: var(--neu-e1);
+}
+
+.neu-inset {
+  background: var(--neu-bg);
+  border-radius: var(--neu-radius);
+  box-shadow: var(--neu-inset);
+}
+
+.neu-e1 { box-shadow: var(--neu-e1); }
+.neu-e2 { box-shadow: var(--neu-e2); }
+.neu-e3 { box-shadow: var(--neu-e3); }
+.neu-e4 { box-shadow: var(--neu-e4); }
+
+/* Anything the user can act on lifts on hover and presses in on click. */
+.neu-interactive {
+  cursor: pointer;
+  transition:
+    box-shadow var(--neu-fast) var(--neu-ease),
+    transform var(--neu-fast) var(--neu-ease);
+}
+
+.neu-interactive:hover {
+  box-shadow: var(--neu-e3);
+  transform: translateY(-2px);
+}
+
+.neu-interactive:active {
+  box-shadow: var(--neu-inset-subtle);
+  transform: translateY(0);
+}
+
+/* ============================================================
+   Cards
+   ============================================================ */
+.neu-card {
+  position: relative;
+  background: var(--neu-bg);
+  border-radius: var(--neu-radius-lg);
+  box-shadow: var(--neu-e2);
+  padding: 1.5rem;
+  transition:
+    box-shadow var(--neu-base) var(--neu-ease),
+    transform var(--neu-base) var(--neu-ease);
+}
+
+.neu-card-lift:hover {
+  box-shadow: var(--neu-e4);
+  transform: translateY(-4px);
+}
+
+/* A 1px inner highlight along the top edge sharpens the extrusion
+   without adding a visible border. */
+.neu-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.5),
+    rgba(255, 255, 255, 0) 34%
+  );
+  opacity: 0.7;
+}
+
+[data-theme='dark'] .neu-card::after {
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.06),
+    rgba(255, 255, 255, 0) 34%
+  );
+}
+
+.neu-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================
+   Buttons
+   ============================================================ */
+/* `display` is declared separately at zero specificity so a responsive
+   utility (`lg:hidden`, `md:hidden`) can still hide these — this stylesheet
+   loads after Tailwind, so a normal `.neu-btn { display: … }` would win
+   against the utility and the element could never be hidden. */
+:where(.neu-btn, .btn-primary, .btn-secondary, .btn-danger) { display: inline-flex; }
+:where(.neu-badge, .badge) { display: inline-flex; }
+:where(.neu-alert, .alert) { display: flex; }
+
+.neu-btn {
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.35rem;
+  border-radius: var(--neu-radius);
+  font-size: 0.875rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: var(--neu-ink-soft);
+  background: var(--neu-bg);
+  box-shadow: var(--neu-e2);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    box-shadow var(--neu-fast) var(--neu-ease),
+    transform var(--neu-fast) var(--neu-ease),
+    color var(--neu-fast) linear;
+}
+
+.neu-btn:hover:not(:disabled) {
+  color: var(--neu-ink);
+  box-shadow: var(--neu-e3);
+  transform: translateY(-2px);
+}
+
+.neu-btn:active:not(:disabled) {
+  box-shadow: var(--neu-inset);
+  transform: translateY(1px);
+}
+
+.neu-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--neu-e2), 0 0 0 3px color-mix(in srgb, var(--neu-primary) 40%, transparent);
+}
+
+.neu-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: var(--neu-e1);
+  transform: none;
+}
+
+/* The primary action is the one place the material is tinted —
+   it reads as a pressed-in coloured key rather than a flat fill. */
+.neu-btn-primary {
+  color: var(--neu-primary-ink);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--neu-primary) 88%, white),
+    color-mix(in srgb, var(--neu-primary) 88%, black)
+  );
+  box-shadow:
+    5px 5px 12px var(--neu-shadow),
+    -5px -5px 12px var(--neu-light),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.neu-btn-primary:hover:not(:disabled) {
+  color: var(--neu-primary-ink);
+  box-shadow:
+    8px 8px 18px var(--neu-shadow),
+    -7px -7px 16px var(--neu-light),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+}
+
+.neu-btn-primary:active:not(:disabled) {
+  box-shadow:
+    inset 4px 4px 9px color-mix(in srgb, var(--neu-primary) 55%, black),
+    inset -3px -3px 8px color-mix(in srgb, var(--neu-primary) 70%, white);
+}
+
+.neu-btn-danger {
+  color: #fff;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--neu-danger) 88%, white),
+    color-mix(in srgb, var(--neu-danger) 88%, black)
+  );
+  box-shadow:
+    5px 5px 12px var(--neu-shadow),
+    -5px -5px 12px var(--neu-light),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+
+.neu-btn-danger:hover:not(:disabled) {
+  color: #fff;
+  box-shadow: 8px 8px 18px var(--neu-shadow), -7px -7px 16px var(--neu-light);
+}
+
+.neu-btn-ghost {
+  background: transparent;
+  box-shadow: none;
+  color: var(--neu-ink-muted);
+}
+
+.neu-btn-ghost:hover:not(:disabled) {
+  background: var(--neu-bg);
+  box-shadow: var(--neu-e1);
+  color: var(--neu-ink);
+}
+
+.neu-btn-ghost:active:not(:disabled) {
+  box-shadow: var(--neu-inset-subtle);
+}
+
+.neu-btn-icon {
+  padding: 0.6rem;
+  border-radius: 50%;
+}
+
+.neu-btn-sm { padding: 0.5rem 1rem; font-size: 0.8125rem; border-radius: var(--neu-radius-sm); }
+.neu-btn-xs { padding: 0.35rem 0.75rem; font-size: 0.75rem; border-radius: var(--neu-radius-sm); }
+.neu-btn-lg { padding: 0.9rem 1.75rem; font-size: 0.95rem; border-radius: var(--neu-radius-lg); }
+
+/* ============================================================
+   Form controls — always inset, because you type *into* things
+   ============================================================ */
+.neu-input,
+.neu-textarea,
+.neu-select {
+  width: 100%;
+  padding: 0.7rem 1rem;
+  border: none;
+  border-radius: var(--neu-radius);
+  background: var(--neu-bg);
+  box-shadow: var(--neu-inset-subtle);
+  color: var(--neu-ink);
+  font-size: 0.875rem;
+  transition:
+    box-shadow var(--neu-base) var(--neu-ease),
+    color var(--neu-fast) linear;
+}
+
+.neu-input::placeholder,
+.neu-textarea::placeholder {
+  color: var(--neu-ink-muted);
+}
+
+.neu-input:hover:not(:disabled),
+.neu-textarea:hover:not(:disabled),
+.neu-select:hover:not(:disabled) {
+  box-shadow: var(--neu-inset);
+}
+
+.neu-input:focus,
+.neu-textarea:focus,
+.neu-select:focus {
+  outline: none;
+  box-shadow:
+    var(--neu-inset-deep),
+    0 0 0 3px color-mix(in srgb, var(--neu-primary) 26%, transparent);
+}
+
+.neu-input:disabled,
+.neu-textarea:disabled,
+.neu-select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.neu-input-error,
+.neu-input-error:focus {
+  box-shadow:
+    var(--neu-inset),
+    0 0 0 3px color-mix(in srgb, var(--neu-danger) 32%, transparent);
+}
+
+.neu-textarea {
+  min-height: 6.5rem;
+  resize: vertical;
+}
+
+.neu-select {
+  appearance: none;
+  padding-right: 2.5rem;
+  cursor: pointer;
+}
+
+.neu-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  color: var(--neu-ink-soft);
+  letter-spacing: 0.01em;
+}
+
+/* ============================================================
+   Badges + pills
+   ============================================================ */
+.neu-badge {
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 650;
+  background: var(--neu-bg);
+  box-shadow: var(--neu-inset-subtle);
+  color: var(--neu-ink-soft);
+}
+
+.neu-badge-success { color: var(--neu-success); }
+.neu-badge-warning,
+.neu-badge-amber   { color: var(--neu-amber); }
+.neu-badge-danger  { color: var(--neu-danger); }
+.neu-badge-info    { color: var(--neu-primary); }
+.neu-badge-violet  { color: var(--neu-violet); }
+
+/* A small tinted dot carries the status colour so the text can
+   stay high-contrast against the low-contrast material. */
+.neu-badge::before {
+  content: '';
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.85;
+}
+
+.neu-badge-plain::before { display: none; }
+
+/* ============================================================
+   Tables
+   ============================================================ */
+.neu-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.neu-table thead th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--neu-ink-muted);
+  background: var(--neu-bg);
+  border-bottom: 1px solid var(--neu-line);
+}
+
+.neu-table tbody td {
+  padding: 0.85rem 1rem;
+  font-size: 0.875rem;
+  color: var(--neu-ink-soft);
+  border-bottom: 1px solid var(--neu-line);
+}
+
+.neu-table tbody tr {
+  transition: background var(--neu-fast) linear;
+}
+
+.neu-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--neu-bg-deep) 70%, transparent);
+}
+
+.neu-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ============================================================
+   Overlays
+   ============================================================ */
+.neu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--neu-bg-deep) 78%, transparent);
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+}
+
+.neu-modal {
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--neu-bg);
+  border-radius: var(--neu-radius-xl);
+  box-shadow: var(--neu-e4);
+}
+
+.neu-modal-header,
+.neu-modal-footer {
+  flex-shrink: 0;
+  padding: 1.15rem 1.6rem;
+}
+
+.neu-modal-header { border-bottom: 1px solid var(--neu-line); }
+.neu-modal-footer {
+  border-top: 1px solid var(--neu-line);
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.neu-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.4rem 1.6rem;
+}
+
+/* ============================================================
+   Feedback
+   ============================================================ */
+.neu-alert {
+  gap: 0.75rem;
+  padding: 0.9rem 1.15rem;
+  border-radius: var(--neu-radius);
+  background: var(--neu-bg);
+  box-shadow: var(--neu-inset-subtle);
+  font-size: 0.875rem;
+  color: var(--neu-ink-soft);
+  border-left: 3px solid var(--neu-primary);
+}
+
+.neu-alert-success { border-left-color: var(--neu-success); }
+.neu-alert-warning { border-left-color: var(--neu-amber); }
+.neu-alert-error   { border-left-color: var(--neu-danger); }
+
+.neu-divider {
+  height: 1px;
+  border: none;
+  background: var(--neu-line);
+  margin: 1.25rem 0;
+}
+
+/* Progress + meters read as a groove with a raised fill. */
+.neu-progress {
+  height: 0.6rem;
+  border-radius: 999px;
+  background: var(--neu-bg);
+  box-shadow: var(--neu-inset-subtle);
+  overflow: hidden;
+}
+
+.neu-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--neu-primary),
+    color-mix(in srgb, var(--neu-violet) 70%, var(--neu-primary))
+  );
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  transition: width var(--neu-slow) var(--neu-ease-out);
+}
+
+.neu-spinner {
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  border: 2px solid var(--neu-line);
+  border-top-color: var(--neu-primary);
+  animation: neu-spin 700ms linear infinite;
+}
+
+@keyframes neu-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Skeletons shimmer along the light source direction. */
+.neu-skeleton {
+  border-radius: var(--neu-radius-sm);
+  background: var(--neu-bg);
+  box-shadow: var(--neu-inset-subtle);
+  position: relative;
+  overflow: hidden;
+}
+
+.neu-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--neu-light) 70%, transparent),
+    transparent
+  );
+  animation: neu-shimmer 1.6s var(--neu-ease) infinite;
+}
+
+@keyframes neu-shimmer {
+  100% { transform: translateX(100%); }
+}
+
+/* ============================================================
+   Scrollbars + selection
+   ============================================================ */
+::-webkit-scrollbar { width: 12px; height: 12px; }
+
+::-webkit-scrollbar-track {
+  background: var(--neu-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  border: 3px solid var(--neu-bg);
+  background: var(--neu-shadow);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--neu-shadow) 70%, var(--neu-ink-muted));
+}
+
+::selection {
+  background: color-mix(in srgb, var(--neu-primary) 24%, transparent);
+  color: var(--neu-ink);
+}
+
+/* ============================================================
+   Legacy aliases
+   ------------------------------------------------------------
+   The eight original module pages were written against the
+   glassmorphism class names. Mapping them here restyles those
+   pages without touching their markup.
+   ============================================================ */
+.glass-card,
+.glass-card-light {
+  position: relative;
+  background: var(--neu-bg);
+  border: none;
+  border-radius: var(--neu-radius-lg);
+  box-shadow: var(--neu-e2);
+  padding: 1.5rem;
+  color: var(--neu-ink);
+  transition:
+    box-shadow var(--neu-base) var(--neu-ease),
+    transform var(--neu-base) var(--neu-ease);
+}
+
+.glass-card:hover,
+.glass-card-light:hover {
+  box-shadow: var(--neu-e3);
+  transform: translateY(-2px);
+}
+
+/* Those pages hard-code white-on-dark utility classes from the old
+   dark glass theme; remap them onto the neumorphic ink scale. */
+.glass-card .text-white,
+.glass-card-light .text-white { color: var(--neu-ink) !important; }
+
+/* Attribute selectors match the literal class string, so the Tailwind
+   slash needs no escaping here. */
+.glass-card [class*='text-white/'],
+.glass-card-light [class*='text-white/'] { color: var(--neu-ink-soft) !important; }
+
+.glass-card [class*='border-white/'],
+.glass-card-light [class*='border-white/'] { border-color: var(--neu-line) !important; }
+
+.glass-card [class*='bg-white/'],
+.glass-card-light [class*='bg-white/'] {
+  background: var(--neu-bg) !important;
+  box-shadow: var(--neu-inset-subtle);
+}
+
+.btn-primary,
+.btn-secondary,
+.btn-danger {
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.35rem;
+  border-radius: var(--neu-radius);
+  font-size: 0.875rem;
+  font-weight: 650;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    box-shadow var(--neu-fast) var(--neu-ease),
+    transform var(--neu-fast) var(--neu-ease),
+    color var(--neu-fast) linear;
+}
+
+.btn-primary {
+  color: var(--neu-primary-ink);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--neu-primary) 88%, white),
+    color-mix(in srgb, var(--neu-primary) 88%, black)
+  );
+  box-shadow:
+    5px 5px 12px var(--neu-shadow),
+    -5px -5px 12px var(--neu-light),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 8px 8px 18px var(--neu-shadow), -7px -7px 16px var(--neu-light);
+  transform: translateY(-2px);
+}
+
+.btn-secondary {
+  color: var(--neu-ink-soft);
+  background: var(--neu-bg);
+  box-shadow: var(--neu-e2);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  color: var(--neu-ink);
+  box-shadow: var(--neu-e3);
+  transform: translateY(-2px);
+}
+
+.btn-danger {
+  color: #fff;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--neu-danger) 88%, white),
+    color-mix(in srgb, var(--neu-danger) 88%, black)
+  );
+  box-shadow: 5px 5px 12px var(--neu-shadow), -5px -5px 12px var(--neu-light);
+}
+
+.btn-primary:active:not(:disabled),
+.btn-secondary:active:not(:disabled),
+.btn-danger:active:not(:disabled) {
+  box-shadow: var(--neu-inset);
+  transform: translateY(1px);
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-sm { padding: 0.5rem 1rem; font-size: 0.8125rem; border-radius: var(--neu-radius-sm); }
+.btn-lg { padding: 0.9rem 1.75rem; font-size: 0.95rem; border-radius: var(--neu-radius-lg); }
+
+.input-glass,
+.textarea-glass {
+  width: 100%;
+  padding: 0.7rem 1rem;
+  border: none;
+  border-radius: var(--neu-radius);
+  background: var(--neu-bg);
+  box-shadow: var(--neu-inset-subtle);
+  color: var(--neu-ink);
+  font-size: 0.875rem;
+  transition: box-shadow var(--neu-base) var(--neu-ease);
+}
+
+.input-glass::placeholder,
+.textarea-glass::placeholder { color: var(--neu-ink-muted); }
+
+.input-glass:hover:not(:disabled),
+.textarea-glass:hover:not(:disabled) { box-shadow: var(--neu-inset); }
+
+.input-glass:focus,
+.textarea-glass:focus {
+  outline: none;
+  box-shadow:
+    var(--neu-inset-deep),
+    0 0 0 3px color-mix(in srgb, var(--neu-primary) 26%, transparent);
+}
+
+.input-glass:disabled,
+.textarea-glass:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.textarea-glass { min-height: 6.5rem; resize: vertical; }
+
+.badge {
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 650;
+  background: var(--neu-bg);
+  box-shadow: var(--neu-inset-subtle);
+  color: var(--neu-ink-soft);
+}
+
+.badge-success { color: var(--neu-success); }
+.badge-warning,
+.badge-amber   { color: var(--neu-amber); }
+.badge-danger  { color: var(--neu-danger); }
+.badge-info    { color: var(--neu-primary); }
+
+.table-glass { width: 100%; border-collapse: separate; border-spacing: 0; }
+
+.table-glass thead th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--neu-ink-muted);
+  border-bottom: 1px solid var(--neu-line);
+}
+
+.table-glass tbody td {
+  padding: 0.85rem 1rem;
+  font-size: 0.875rem;
+  color: var(--neu-ink-soft);
+  border-bottom: 1px solid var(--neu-line);
+}
+
+.table-glass tbody tr:hover td {
+  background: color-mix(in srgb, var(--neu-bg-deep) 70%, transparent);
+}
+
+.table-glass tbody tr:last-child td { border-bottom: none; }
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--neu-bg-deep) 78%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.modal-content {
+  background: var(--neu-bg);
+  border: none;
+  border-radius: var(--neu-radius-xl);
+  box-shadow: var(--neu-e4);
+}
+
+.alert {
+  gap: 0.75rem;
+  padding: 0.9rem 1.15rem;
+  border-radius: var(--neu-radius);
+  background: var(--neu-bg);
+  box-shadow: var(--neu-inset-subtle);
+  font-size: 0.875rem;
+  color: var(--neu-ink-soft);
+  border-left: 3px solid var(--neu-primary);
+}
+
+.alert-success { border-left-color: var(--neu-success); }
+.alert-warning { border-left-color: var(--neu-amber); }
+.alert-error   { border-left-color: var(--neu-danger); }
+.alert-info    { border-left-color: var(--neu-primary); }
+
+.divider {
+  height: 1px;
+  border: none;
+  background: var(--neu-line);
+  margin: 1.25rem 0;
+}
+
+.spinner {
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  border: 2px solid var(--neu-line);
+  border-top-color: var(--neu-primary);
+  animation: neu-spin 700ms linear infinite;
+}
+
+.gradient-border {
+  padding: 1px;
+  border-radius: var(--neu-radius-lg);
+  background: linear-gradient(145deg, var(--neu-light), var(--neu-shadow));
+}
+
+.gradient-border-content {
+  border-radius: calc(var(--neu-radius-lg) - 1px);
+  background: var(--neu-bg);
+}
+
+@media (max-width: 768px) {
+  .glass-card,
+  .glass-card-light,
+  .neu-card {
+    padding: 1.15rem;
+    border-radius: var(--neu-radius);
+  }
+
+  /* Big soft shadows cost real frames on mid-range phones. */
+  .neu-card,
+  .glass-card,
+  .glass-card-light,
+  .neu-surface,
+  .neu-raised {
+    box-shadow: var(--neu-e1);
+  }
+}

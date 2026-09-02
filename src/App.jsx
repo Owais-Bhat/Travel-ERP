@@ -29,6 +29,15 @@ import CommunicationPage from './pages/Modules/CommunicationPage';
 import TransportPage from './pages/Modules/TransportPage';
 import AdmissionsPage from './pages/Modules/AdmissionsPage';
 
+// EIMS Modules
+import ProgramsPage from './pages/Modules/ProgramsPage';
+import CertificationsPage from './pages/Modules/CertificationsPage';
+import ScholarshipsPage from './pages/Modules/ScholarshipsPage';
+import ReferralsPage from './pages/Modules/ReferralsPage';
+import LeadsPage from './pages/Modules/LeadsPage';
+import DocumentsPage from './pages/Modules/DocumentsPage';
+import ReportsPage from './pages/Modules/ReportsPage';
+
 // AI Pages
 import AiTutorPage from './pages/AI/AiTutorPage';
 import CareerPathPage from './pages/AI/CareerPathPage';
@@ -152,6 +161,64 @@ function App() {
                 element={
                   <GuardedPage path="/admissions" feature="admissions">
                     <AdmissionsPage />
+                  </GuardedPage>
+                }
+              />
+
+              {/* EIMS Module Routes */}
+              <Route
+                path="/programs"
+                element={
+                  <GuardedPage path="/programs" feature="programs">
+                    <ProgramsPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/certifications"
+                element={
+                  <GuardedPage path="/certifications" feature="certifications">
+                    <CertificationsPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/scholarships"
+                element={
+                  <GuardedPage path="/scholarships" feature="scholarships">
+                    <ScholarshipsPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/referrals"
+                element={
+                  <GuardedPage path="/referrals" feature="referrals">
+                    <ReferralsPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/leads"
+                element={
+                  <GuardedPage path="/leads" feature="leads">
+                    <LeadsPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/documents"
+                element={
+                  <GuardedPage path="/documents" feature="documents">
+                    <DocumentsPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/reports"
+                element={
+                  <GuardedPage path="/reports" feature="reports">
+                    <ReportsPage />
                   </GuardedPage>
                 }
               />

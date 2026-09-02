@@ -21,7 +21,14 @@ export const FEATURE_CATALOG = [
   { key: 'career_path', label: 'Career Path AI', category: 'ai', route: '/career-path', status: 'live' },
   { key: 'performance_analysis', label: 'Performance AI', category: 'ai', route: '/performance-analysis', status: 'live' },
   { key: 'fee_recovery', label: 'Fee Recovery AI', category: 'ai', route: '/fee-recovery', status: 'live' },
-  { key: 'reports_builder', label: 'Custom Reports', category: 'platform', route: null, status: 'planned' },
+  { key: 'programs', label: 'Programs & Courses', category: 'academics', route: '/programs', status: 'live' },
+  { key: 'certifications', label: 'Certifications', category: 'academics', route: '/certifications', status: 'live' },
+  { key: 'scholarships', label: 'Scholarships & Cashback', category: 'core', route: '/scholarships', status: 'live' },
+  { key: 'referrals', label: 'Referrals & Commissions', category: 'core', route: '/referrals', status: 'live' },
+  { key: 'leads', label: 'Lead CRM', category: 'core', route: '/leads', status: 'live' },
+  { key: 'documents', label: 'Document Vault', category: 'core', route: '/documents', status: 'live' },
+  { key: 'reports', label: 'Reports & Analytics', category: 'platform', route: '/reports', status: 'live' },
+  { key: 'reports_builder', label: 'Custom Report Builder', category: 'platform', route: null, status: 'planned' },
   { key: 'payments', label: 'Payment Gateway', category: 'platform', route: null, status: 'planned' },
   { key: 'whatsapp_sms', label: 'WhatsApp & SMS', category: 'engagement', route: null, status: 'planned' },
   { key: 'hostel', label: 'Hostel', category: 'extensions', route: null, status: 'planned' },
@@ -44,19 +51,19 @@ export const PLAN_DEFINITIONS = {
   starter: {
     label: 'Starter',
     monthlyPrice: 1999,
-    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'exams', 'communication'],
+    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'exams', 'communication', 'documents', 'leads'],
     limits: { users: 25, students: 500, aiCredits: 100 },
   },
   growth: {
     label: 'Growth',
     monthlyPrice: 4999,
-    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'ai_tutor', 'performance_analysis'],
+    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'ai_tutor', 'performance_analysis', 'documents', 'leads', 'programs', 'certifications', 'reports'],
     limits: { users: 100, students: 2000, aiCredits: 1000 },
   },
   pro: {
     label: 'Pro',
     monthlyPrice: 9999,
-    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments'],
+    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments', 'documents', 'leads', 'programs', 'certifications', 'reports', 'scholarships', 'referrals'],
     limits: { users: 300, students: 10000, aiCredits: 5000 },
   },
   enterprise: {
@@ -78,6 +85,30 @@ export function isFeatureEnabled(institution, featureKey) {
   const plan = institution?.subscription_plan || 'free';
   const overrides = institution?.settings?.modules || {};
   return Boolean(getPlanFeatureMap(plan, overrides)[featureKey]);
+}
+
+/**
+ * Roles a tenant admin can restrict. institution_admin/principal are
+ * excluded — they set the restrictions, so letting them lock themselves
+ * out would be a self-inflicted support ticket. Keep in sync with
+ * backend/src/saas/features.js.
+ */
+export const RESTRICTABLE_ROLES = ['teacher', 'student', 'parent', 'staff'];
+
+/**
+ * What a specific role can actually see: the plan's features narrowed by
+ * whatever the tenant admin restricted that role to (`settings.role_features`).
+ * A role with no override gets everything the plan enables — restrictions
+ * are opt-in, so a tenant that has never touched the setting is unaffected.
+ */
+export function isFeatureEnabledForRole(institution, role, featureKey) {
+  if (!featureKey) return true;
+  if (!isFeatureEnabled(institution, featureKey)) return false;
+  if (!RESTRICTABLE_ROLES.includes(role)) return true;
+
+  const override = institution?.settings?.role_features?.[role];
+  if (!Array.isArray(override)) return true;
+  return override.includes(featureKey);
 }
 
 export function getFeatureByRoute(pathname) {

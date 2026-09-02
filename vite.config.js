@@ -3,6 +3,10 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  server: {
+    // Honour PORT so tooling can hand us a free port.
+    port: Number(process.env.PORT) || 5173,
+  },
   build: {
     rollupOptions: {
       output: {
@@ -10,7 +14,6 @@ export default defineConfig({
           vendor: ['react', 'react-dom', 'react-router-dom'],
           ui: ['framer-motion', '@headlessui/react', 'react-icons'],
           charts: ['recharts'],
-          supabase: ['@supabase/supabase-js'],
           utils: ['date-fns', 'uuid', 'zustand', 'js-cookie'],
         },
       },

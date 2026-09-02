@@ -1,21 +1,28 @@
-const GRADIENTS = [
-  'from-blue-500 to-cyan-400',
-  'from-purple-500 to-pink-400',
-  'from-emerald-500 to-teal-400',
-  'from-orange-500 to-amber-400',
-  'from-indigo-500 to-blue-400',
-  'from-rose-500 to-pink-400',
+/**
+ * Avatar.
+ *
+ * Sits in a carved well so faces and initials read as inlaid into the
+ * surface. The tint is derived from the name so the same person keeps the
+ * same colour across the app.
+ */
+const TINTS = [
+  ['var(--neu-primary)', 'var(--neu-violet)'],
+  ['var(--neu-teal)', 'var(--neu-primary)'],
+  ['var(--neu-coral)', 'var(--neu-amber)'],
+  ['var(--neu-violet)', 'var(--neu-coral)'],
+  ['var(--neu-success)', 'var(--neu-teal)'],
+  ['var(--neu-amber)', 'var(--neu-coral)'],
 ];
 
-function getGradient(name = '') {
-  const code = [...name].reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  return GRADIENTS[code % GRADIENTS.length];
+function getTint(name = '') {
+  const code = [...name].reduce((total, character) => total + character.charCodeAt(0), 0);
+  return TINTS[code % TINTS.length];
 }
 
 function getInitials(name = '') {
-  const parts = name.trim().split(/\s+/);
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
   if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  return name.slice(0, 2).toUpperCase() || 'U';
+  return String(name).slice(0, 2).toUpperCase() || 'U';
 }
 
 const SIZE_CLASSES = {
@@ -32,25 +39,28 @@ export default function Avatar({
   src,
   size = 'md',
   className = '',
-  rounded = 'rounded-xl',
+  rounded = 'rounded-2xl',
+  ring = false,
 }) {
   const sizeClass = SIZE_CLASSES[size] || SIZE_CLASSES.md;
-  const gradient = getGradient(name);
-  const initials = getInitials(name);
+  const [from, to] = getTint(name);
 
   return (
     <div
-      className={`
-        ${sizeClass} ${rounded} ${className}
-        bg-gradient-to-br ${gradient}
-        flex items-center justify-center
-        font-semibold text-white shrink-0 overflow-hidden
-      `}
+      className={`${sizeClass} ${rounded} ${className} flex items-center justify-center font-semibold shrink-0 overflow-hidden`}
+      style={{
+        color: '#fff',
+        background: `linear-gradient(145deg, ${from}, ${to})`,
+        boxShadow: ring
+          ? 'var(--neu-e1), 0 0 0 3px color-mix(in srgb, var(--neu-primary) 26%, transparent)'
+          : 'var(--neu-e1)',
+      }}
+      title={name || undefined}
     >
       {src ? (
         <img src={src} alt={name} className="w-full h-full object-cover" />
       ) : (
-        <span className="font-display">{initials}</span>
+        <span className="font-display" aria-hidden="true">{getInitials(name)}</span>
       )}
     </div>
   );

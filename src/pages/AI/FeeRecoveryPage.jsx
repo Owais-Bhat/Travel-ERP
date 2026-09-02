@@ -5,7 +5,7 @@ import Button from '../../components/Common/Button';
 import Input from '../../components/Common/Input';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import supabase from '../../lib/supabase';
+import api from '../../lib/api';
 import { feeRecoveryAssistant } from '../../lib/openrouter';
 import {
   MdAutoAwesome, MdAttachMoney, MdSearch, MdClose,
@@ -71,13 +71,12 @@ export default function FeeRecoveryPage() {
   const handleStudentSearch = async (val) => {
     setStudentSearch(val);
     if (!val.trim() || val.length < 2) { setStudentResults([]); return; }
-    const { data } = await supabase
-      .from('students')
-      .select('id, first_name, last_name, admission_no, class_name, parent_name, parent_phone')
-      .eq('institution_id', profile?.institution_id)
-      .or(`first_name.ilike.%${val}%,last_name.ilike.%${val}%,admission_no.ilike.%${val}%`)
-      .limit(8);
-    setStudentResults(data || []);
+    try {
+      const { data } = await api.get('/students', { params: { search: val, pageSize: 8, page: 1 } });
+      setStudentResults(data?.data || []);
+    } catch {
+      setStudentResults([]);
+    }
   };
 
   const handleSelectStudent = async (student) => {
@@ -89,21 +88,20 @@ export default function FeeRecoveryPage() {
       setForm(f => ({ ...f, parentName: student.parent_name }));
     }
 
-    // Attempt to load outstanding fees
-    const { data: feesData } = await supabase
-      .from('fees')
-      .select('outstanding_amount, amount')
-      .eq('student_id', student.id)
-      .eq('status', 'pending')
-      .limit(1)
-      .single();
+    // Pull the student's unpaid balance so the strategy has a real number
+    // to work with rather than a guess.
+    try {
+      const { data } = await api.get('/fees', { params: { studentId: student.id } });
+      const outstanding = (data || [])
+        .filter((fee) => !['paid', 'waived', 'cancelled'].includes(fee.status))
+        .reduce((total, fee) => total + (Number(fee.total_amount) - Number(fee.paid_amount)), 0);
 
-    if (feesData) {
-      setForm(f => ({
-        ...f,
-        outstandingAmount: String(feesData.outstanding_amount || feesData.amount || ''),
-      }));
-      notification.success('Outstanding fee loaded from records');
+      if (outstanding > 0) {
+        setForm(f => ({ ...f, outstandingAmount: String(outstanding.toFixed(2)) }));
+        notification.success('Outstanding fee loaded from records');
+      }
+    } catch {
+      // No fee records, or no permission to read them — the user can type it in.
     }
   };
 

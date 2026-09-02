@@ -6,7 +6,7 @@ import Input from '../../components/Common/Input';
 import Badge from '../../components/Common/Badge';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import supabase from '../../lib/supabase';
+import api from '../../lib/api';
 import { formatCurrency, formatDate } from '../../utils/helpers';
 import {
   MdAdd,
@@ -110,34 +110,28 @@ export default function FeesPage() {
   const loadFees = useCallback(async () => {
     if (!profile?.institution_id) return;
     setLoading(true);
-    const { data, error } = await supabase
-      .from('fee_payments')
-      .select('*, students(first_name, last_name, admission_no, class_name)')
-      .eq('institution_id', profile.institution_id)
-      .order('due_date', { ascending: false });
-
-    if (error) {
-      notification.error('Failed to load fees: ' + error.message);
-    } else {
+    try {
+      // The API nests the joined student under `students`, the same shape
+      // this screen already renders from.
+      const { data } = await api.get('/fees', { params: { sort: 'due_date', order: 'desc' } });
       setFees(data || []);
+    } catch (err) {
+      notification.error('Failed to load fees: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [profile?.institution_id]);
 
   const loadStudents = useCallback(async (q = '') => {
     if (!profile?.institution_id) return;
-    let query = supabase
-      .from('students')
-      .select('id, first_name, last_name, admission_no, class_name')
-      .eq('institution_id', profile.institution_id)
-      .limit(50);
-
-    if (q) {
-      query = query.ilike('first_name', `%${q}%`);
+    try {
+      const { data } = await api.get('/students', {
+        params: { pageSize: 50, page: 1, ...(q ? { search: q } : {}) },
+      });
+      setStudents(data?.data || []);
+    } catch {
+      setStudents([]);
     }
-
-    const { data } = await query;
-    setStudents(data || []);
   }, [profile?.institution_id]);
 
   useEffect(() => { loadFees(); }, [loadFees]);
@@ -192,24 +186,20 @@ export default function FeesPage() {
     const newStatus = newPaid >= payModal.total_amount ? 'paid' : 'partial';
     const receiptNo = `RCP${Date.now()}`;
 
-    const { error } = await supabase
-      .from('fee_payments')
-      .update({
+    try {
+      await api.put(`/fees/${payModal.id}`, {
         paid_amount: newPaid,
         status: newStatus,
         payment_date: payForm.payment_date,
         receipt_no: receiptNo,
-      })
-      .eq('id', payModal.id);
-
-    setSavingPay(false);
-
-    if (error) {
-      notification.error('Payment failed: ' + error.message);
-    } else {
+      });
       notification.success(`Payment recorded. Receipt: ${receiptNo}`);
       setPayModal(null);
       loadFees();
+    } catch (err) {
+      notification.error('Payment failed: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setSavingPay(false);
     }
   };
 
@@ -222,24 +212,23 @@ export default function FeesPage() {
     }
 
     setSavingAdd(true);
-    const { error } = await supabase.from('fee_payments').insert([{
-      institution_id: profile.institution_id,
-      student_id: addForm.student_id,
-      fee_type: addForm.fee_type,
-      total_amount: parseFloat(addForm.total_amount),
-      paid_amount: 0,
-      due_date: addForm.due_date,
-      status: 'pending',
-    }]);
-    setSavingAdd(false);
-
-    if (error) {
-      notification.error('Failed to add fee: ' + error.message);
-    } else {
+    try {
+      await api.post('/fees', {
+        student_id: addForm.student_id,
+        fee_type: addForm.fee_type,
+        total_amount: parseFloat(addForm.total_amount),
+        paid_amount: 0,
+        due_date: addForm.due_date,
+        status: 'pending',
+      });
       notification.success('Fee record created');
       setAddModal(false);
       setAddForm({ student_id: '', fee_type: 'Tuition', total_amount: '', due_date: '' });
       loadFees();
+    } catch (err) {
+      notification.error('Failed to add fee: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setSavingAdd(false);
     }
   };
 

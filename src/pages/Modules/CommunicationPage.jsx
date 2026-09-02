@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import MainLayout from '../../components/Layout/MainLayout';
 import GlassCard from '../../components/Common/GlassCard';
 import Button from '../../components/Common/Button';
 import Input from '../../components/Common/Input';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import supabase, { isSupabaseConfigured } from '../../lib/supabase';
-import { notifyInstitution } from '../../lib/notificationsApi';
+import api from '../../lib/api';
 import {
   MdSend, MdCampaign, MdMessage, MdInbox, MdOutbox,
   MdAdd, MdDelete, MdClose, MdSearch, MdCircle,
@@ -55,17 +55,14 @@ export default function CommunicationPage() {
   const loadAnnouncements = async () => {
     if (!profile?.institution_id) return;
     setAnnLoading(true);
-    const { data, error } = await supabase
-      .from('announcements')
-      .select('*, user_profiles(first_name,last_name)')
-      .eq('institution_id', profile.institution_id)
-      .order('created_at', { ascending: false });
-    if (error) {
-      notification.error('Failed to load announcements');
-    } else {
+    try {
+      const { data } = await api.get('/communication/announcements');
       setAnnouncements(data || []);
+    } catch (err) {
+      notification.error(err.response?.data?.error || 'Failed to load announcements');
+    } finally {
+      setAnnLoading(false);
     }
-    setAnnLoading(false);
   };
 
   // ─── Load messages ─────────────────────────────────────────────────
@@ -73,74 +70,62 @@ export default function CommunicationPage() {
     if (!profile?.id) return;
     setMsgLoading(true);
 
-    const [inboxRes, sentRes] = await Promise.all([
-      supabase
-        .from('messages')
-        .select('*, sender:user_profiles!messages_sender_id_fkey(first_name,last_name)')
-        .eq('recipient_id', profile.id)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('messages')
-        .select('*, recipient:user_profiles!messages_recipient_id_fkey(first_name,last_name)')
-        .eq('sender_id', profile.id)
-        .order('created_at', { ascending: false }),
-    ]);
-
-    if (inboxRes.error) notification.error('Failed to load inbox');
-    else {
-      const msgs = inboxRes.data || [];
-      setInbox(msgs);
-      setUnreadCount(msgs.filter(m => !m.is_read).length);
+    try {
+      const [inboxRes, sentRes] = await Promise.all([
+        api.get('/communication/messages', { params: { box: 'inbox' } }),
+        api.get('/communication/messages', { params: { box: 'sent' } }),
+      ]);
+      setInbox(inboxRes.data?.messages || []);
+      setUnreadCount(inboxRes.data?.unread || 0);
+      setSent(sentRes.data?.messages || []);
+    } catch (err) {
+      notification.error(err.response?.data?.error || 'Failed to load messages');
+    } finally {
+      setMsgLoading(false);
     }
-
-    if (sentRes.error) notification.error('Failed to load sent messages');
-    else setSent(sentRes.data || []);
-
-    setMsgLoading(false);
   };
 
   useEffect(() => {
-    if (profile && isSupabaseConfigured) {
+    if (profile?.institution_id) {
       loadAnnouncements();
       loadMessages();
     }
-  }, [profile]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.institution_id]);
 
-  // ─── Realtime subscription for new messages ────────────────────────
-  // TODO: Communication is not yet migrated off Supabase to the MySQL
-  // backend — announcements/messages/realtime here are inert until then.
+  // ─── New-message polling ───────────────────────────────
+  // Replaces the Supabase realtime channel: MySQL has no LISTEN/NOTIFY, so
+  // the inbox asks the API for anything newer than the newest it holds.
   useEffect(() => {
-    if (!profile?.id || !isSupabaseConfigured) return;
+    if (!profile?.id) return undefined;
 
-    const channel = supabase
-      .channel('messages')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `recipient_id=eq.${profile.id}`,
-        },
-        async (payload) => {
-          // Fetch sender info for the new message
-          const { data: senderData } = await supabase
-            .from('user_profiles')
-            .select('first_name,last_name')
-            .eq('id', payload.new.sender_id)
-            .single();
-          const newMsg = { ...payload.new, sender: senderData };
-          setInbox(prev => [newMsg, ...prev]);
-          setUnreadCount(prev => prev + 1);
-          notification.info('New message received!');
+    let cursor = null;
+    const tick = async () => {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const { data } = await api.get('/communication/messages', {
+          params: { box: 'inbox', ...(cursor ? { since: cursor } : {}) },
+        });
+        const fresh = data?.messages || [];
+        if (fresh.length > 0) {
+          cursor = fresh[0].created_at;
+          setInbox((prev) => {
+            const known = new Set(prev.map((m) => m.id));
+            const added = fresh.filter((m) => !known.has(m.id));
+            if (added.length === 0) return prev;
+            notification.info(added.length === 1 ? 'New message received' : `${added.length} new messages`);
+            return [...added, ...prev];
+          });
         }
-      )
-      .subscribe();
-
-    realtimeRef.current = channel;
-    return () => {
-      supabase.removeChannel(channel);
+        if (typeof data?.unread === 'number') setUnreadCount(data.unread);
+      } catch {
+        // Offline or the session expired — the next tick retries.
+      }
     };
+
+    realtimeRef.current = setInterval(tick, 30000);
+    return () => clearInterval(realtimeRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id]);
 
   // ─── Announcement: save ────────────────────────────────────────────
@@ -150,37 +135,24 @@ export default function CommunicationPage() {
       return;
     }
     setAnnSaving(true);
-    const { data, error } = await supabase
-      .from('announcements')
-      .insert([{
-        institution_id: profile.institution_id,
-        created_by: profile.id,
+    try {
+      // The server posts the announcement and fans it out to every
+      // recipient's notification bell in one transaction.
+      const { data } = await api.post('/communication/announcements', {
         title: annForm.title.trim(),
         content: annForm.content.trim(),
         priority: annForm.priority,
         target_audience: annForm.target_audience,
-      }])
-      .select('*, user_profiles(first_name,last_name)')
-      .single();
-
-    if (error) {
-      notification.error('Failed to save announcement');
-    } else {
-      setAnnouncements(prev => [data, ...prev]);
+      });
+      setAnnouncements((prev) => [data, ...prev]);
       setAnnForm({ title: '', content: '', priority: 'normal', target_audience: 'all' });
       setShowAnnForm(false);
       notification.success('Announcement posted!');
-      // Fan out to everyone's in-app notification bell (fire and forget)
-      notifyInstitution({
-        institutionId: profile.institution_id,
-        title: data.title,
-        body: data.content,
-        type: 'announcement',
-        link: '/communication',
-        createdBy: profile.id,
-      });
+    } catch (err) {
+      notification.error(err.response?.data?.error || 'Failed to save announcement');
+    } finally {
+      setAnnSaving(false);
     }
-    setAnnSaving(false);
   };
 
   // ─── Announcement: delete ──────────────────────────────────────────
@@ -191,12 +163,12 @@ export default function CommunicationPage() {
       notification.error('You can only delete your own announcements');
       return;
     }
-    const { error } = await supabase.from('announcements').delete().eq('id', ann.id);
-    if (error) {
-      notification.error('Failed to delete announcement');
-    } else {
-      setAnnouncements(prev => prev.filter(a => a.id !== ann.id));
+    try {
+      await api.delete(`/communication/announcements/${ann.id}`);
+      setAnnouncements((prev) => prev.filter((a) => a.id !== ann.id));
       notification.success('Announcement deleted');
+    } catch (err) {
+      notification.error(err.response?.data?.error || 'Failed to delete announcement');
     }
   };
 
@@ -204,9 +176,9 @@ export default function CommunicationPage() {
   const handleSelectMsg = async (msg) => {
     setSelectedMsg(msg);
     if (!msg.is_read && msgTab === 'inbox') {
-      await supabase.from('messages').update({ is_read: true }).eq('id', msg.id);
-      setInbox(prev => prev.map(m => m.id === msg.id ? { ...m, is_read: true } : m));
-      setUnreadCount(prev => Math.max(0, prev - 1));
+      setInbox((prev) => prev.map((m) => (m.id === msg.id ? { ...m, is_read: true } : m)));
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+      api.post(`/communication/messages/${msg.id}/read`).catch(() => {});
     }
   };
 
@@ -215,14 +187,12 @@ export default function CommunicationPage() {
     setRecipientSearch(val);
     setSelectedRecipient(null);
     if (!val.trim() || val.length < 2) { setRecipientResults([]); return; }
-    const { data } = await supabase
-      .from('user_profiles')
-      .select('id, first_name, last_name, role')
-      .eq('institution_id', profile.institution_id)
-      .neq('id', profile.id)
-      .or(`first_name.ilike.%${val}%,last_name.ilike.%${val}%`)
-      .limit(8);
-    setRecipientResults(data || []);
+    try {
+      const { data } = await api.get('/communication/recipients', { params: { search: val } });
+      setRecipientResults(data || []);
+    } catch {
+      setRecipientResults([]);
+    }
   };
 
   // ─── Send message ──────────────────────────────────────────────────
@@ -232,31 +202,24 @@ export default function CommunicationPage() {
     if (!composeForm.body.trim()) { notification.error('Message body is required'); return; }
 
     setComposeSaving(true);
-    const { data, error } = await supabase
-      .from('messages')
-      .insert([{
-        institution_id: profile.institution_id,
-        sender_id: profile.id,
+    try {
+      const { data } = await api.post('/communication/messages', {
         recipient_id: selectedRecipient.id,
         subject: composeForm.subject.trim(),
         body: composeForm.body.trim(),
-        is_read: false,
-      }])
-      .select('*, recipient:user_profiles!messages_recipient_id_fkey(first_name,last_name)')
-      .single();
-
-    if (error) {
-      notification.error('Failed to send message');
-    } else {
-      setSent(prev => [data, ...prev]);
+      });
+      setSent((prev) => [data, ...prev]);
       setComposeForm({ subject: '', body: '' });
       setRecipientSearch('');
       setSelectedRecipient(null);
       setRecipientResults([]);
       setShowCompose(false);
       notification.success('Message sent!');
+    } catch (err) {
+      notification.error(err.response?.data?.error || 'Failed to send message');
+    } finally {
+      setComposeSaving(false);
     }
-    setComposeSaving(false);
   };
 
   const currentMessages = msgTab === 'inbox' ? inbox : sent;
@@ -516,7 +479,11 @@ export default function CommunicationPage() {
         )}
 
         {/* ─── COMPOSE MODAL ─────────────────────────────────────────── */}
-        {showCompose && (
+        {/* Portalled to <body>: MainLayout's ancestors set `perspective` and
+            `will-change: transform` for the 3D shell, which gives fixed-
+            position descendants a new containing block instead of the
+            viewport — an in-place backdrop here would land off-screen. */}
+        {showCompose && createPortal(
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <GlassCard className="w-full max-w-lg p-6">
               <div className="flex justify-between items-center mb-4">
@@ -596,7 +563,8 @@ export default function CommunicationPage() {
                 <Button variant="secondary" onClick={() => setShowCompose(false)}>Cancel</Button>
               </div>
             </GlassCard>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     </MainLayout>

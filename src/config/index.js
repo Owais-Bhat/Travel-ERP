@@ -1,6 +1,4 @@
 // API Configuration
-export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-export const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 export const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || '';
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 export const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:5000';
@@ -33,7 +31,7 @@ export const ROLES = {
   ADMIN: 'admin',
 };
 
-// Color Palette - Glassmorphism + Light Blue Gradient
+// Accent palette. Surface colours live in src/styles/neumorphism.css.
 export const COLORS = {
   primary: '#0066FF',
   light_blue: '#E0F2FE',
@@ -77,118 +75,128 @@ export const STATUS_COLORS = {
 };
 
 // Menu Items for different roles (icon names mapped in Sidebar component)
+// Menu Items for different roles (icon names mapped in Sidebar component)
+const TENANT_ADMIN_MENU = [
+  {
+    key: 'dashboard', iconName: 'MdDashboard', label: 'Dashboard', path: '/dashboard',
+  },
+  {
+    key: 'academics',
+    iconName: 'MdMenuBook',
+    label: 'Academics',
+    subItems: [
+      { key: 'programs', label: 'Programs & Courses', path: '/programs' },
+      { key: 'students', label: 'Students', path: '/students' },
+      { key: 'attendance', label: 'Attendance', path: '/attendance' },
+      { key: 'exams', label: 'Exams', path: '/exams' },
+      { key: 'lms', label: 'Learning', path: '/lms' },
+      { key: 'certifications', label: 'Certifications', path: '/certifications' },
+    ],
+  },
+  {
+    key: 'growth',
+    iconName: 'MdTrendingUp',
+    label: 'Growth',
+    subItems: [
+      { key: 'leads', label: 'Lead CRM', path: '/leads' },
+      { key: 'admissions', label: 'Admissions', path: '/admissions' },
+      { key: 'referrals', label: 'Referrals', path: '/referrals' },
+    ],
+  },
+  {
+    key: 'finance',
+    iconName: 'MdAccountBalance',
+    label: 'Finance',
+    subItems: [
+      { key: 'fees', label: 'Fees', path: '/fees' },
+      { key: 'scholarships', label: 'Scholarships', path: '/scholarships' },
+    ],
+  },
+  {
+    key: 'operations',
+    iconName: 'MdBusiness',
+    label: 'Operations',
+    subItems: [
+      { key: 'documents', label: 'Documents', path: '/documents' },
+      { key: 'transport', label: 'Transport', path: '/transport' },
+      { key: 'communication', label: 'Communication', path: '/communication' },
+    ],
+  },
+  { key: 'reports', iconName: 'MdAssessment', label: 'Reports', path: '/reports' },
+  {
+    key: 'ai',
+    iconName: 'MdLightbulb',
+    label: 'AI Tools',
+    subItems: [
+      { key: 'career-path', label: 'Career Path', path: '/career-path' },
+      { key: 'performance', label: 'Performance', path: '/performance-analysis' },
+      { key: 'fee-recovery', label: 'Fee Recovery', path: '/fee-recovery' },
+    ],
+  },
+  { key: 'settings', iconName: 'MdSettings', label: 'Settings', path: '/settings' },
+];
+
 export const MENU_ITEMS = {
   super_admin: [
     { key: 'admin', iconName: 'MdAdminPanelSettings', label: 'HQ Console', path: '/admin' },
-    { key: 'dashboard', iconName: 'MdDashboard', label: 'School Preview', path: '/dashboard' },
+    { key: 'dashboard', iconName: 'MdDashboard', label: 'Tenant Preview', path: '/dashboard' },
+    { key: 'reports', iconName: 'MdAssessment', label: 'Reports', path: '/reports' },
     { key: 'analytics', iconName: 'MdTrendingUp', label: 'AI Insights', path: '/performance-analysis' },
     { key: 'settings', iconName: 'MdSettings', label: 'Platform Settings', path: '/settings' },
   ],
-  institution_admin: [
-    { key: 'dashboard', iconName: 'MdDashboard', label: 'Dashboard', path: '/dashboard' },
-    {
-      key: 'academics',
-      iconName: 'MdBook',
-      label: 'Academics',
-      subItems: [
-        { key: 'students', label: 'Students', path: '/students' },
-        { key: 'attendance', label: 'Attendance', path: '/attendance' },
-        { key: 'exams', label: 'Exams', path: '/exams' },
-        { key: 'lms', label: 'Learning', path: '/lms' },
-      ]
-    },
-    {
-      key: 'operations',
-      iconName: 'MdBusiness',
-      label: 'Operations',
-      subItems: [
-        { key: 'admissions', label: 'Admissions', path: '/admissions' },
-        { key: 'transport', label: 'Transport', path: '/transport' },
-        { key: 'communication', label: 'Communication', path: '/communication' },
-      ]
-    },
-    { key: 'fees', iconName: 'MdAccountBalance', label: 'Fees', path: '/fees' },
-    {
-      key: 'ai',
-      iconName: 'MdLightbulb',
-      label: 'AI Tools',
-      subItems: [
-        { key: 'career-path', label: 'Career Path', path: '/career-path' },
-        { key: 'performance', label: 'Performance', path: '/performance-analysis' },
-        { key: 'fee-recovery', label: 'Fee Recovery', path: '/fee-recovery' },
-      ]
-    },
-    { key: 'settings', iconName: 'MdSettings', label: 'Settings', path: '/settings' },
-  ],
-  principal: [
-    { key: 'dashboard', iconName: 'MdDashboard', label: 'Dashboard', path: '/dashboard' },
-    {
-      key: 'academics',
-      iconName: 'MdBook',
-      label: 'Academics',
-      subItems: [
-        { key: 'students', label: 'Students', path: '/students' },
-        { key: 'attendance', label: 'Attendance', path: '/attendance' },
-        { key: 'exams', label: 'Exams', path: '/exams' },
-        { key: 'lms', label: 'Learning', path: '/lms' },
-      ]
-    },
-    {
-      key: 'operations',
-      iconName: 'MdBusiness',
-      label: 'Operations',
-      subItems: [
-        { key: 'admissions', label: 'Admissions', path: '/admissions' },
-        { key: 'transport', label: 'Transport', path: '/transport' },
-        { key: 'communication', label: 'Communication', path: '/communication' },
-      ]
-    },
-    { key: 'fees', iconName: 'MdAccountBalance', label: 'Fees', path: '/fees' },
-    {
-      key: 'ai',
-      iconName: 'MdLightbulb',
-      label: 'AI Tools',
-      subItems: [
-        { key: 'career-path', label: 'Career Path', path: '/career-path' },
-        { key: 'performance', label: 'Performance', path: '/performance-analysis' },
-        { key: 'fee-recovery', label: 'Fee Recovery', path: '/fee-recovery' },
-      ]
-    },
-    { key: 'settings', iconName: 'MdSettings', label: 'Settings', path: '/settings' },
-  ],
+
+  institution_admin: TENANT_ADMIN_MENU,
+  principal: TENANT_ADMIN_MENU,
+
   teacher: [
     { key: 'dashboard', iconName: 'MdDashboard', label: 'Dashboard', path: '/dashboard' },
     { key: 'my-classes', iconName: 'MdPeople', label: 'Students', path: '/students' },
     { key: 'attendance', iconName: 'MdAccessTime', label: 'Attendance', path: '/attendance' },
-    { key: 'lessons', iconName: 'MdBook', label: 'Learning', path: '/lms' },
-    { key: 'exams', iconName: 'MdBook', label: 'Exams', path: '/exams' },
+    { key: 'lessons', iconName: 'MdMenuBook', label: 'Learning', path: '/lms' },
+    { key: 'programs', iconName: 'MdBook', label: 'Programs', path: '/programs' },
+    { key: 'exams', iconName: 'MdGrade', label: 'Exams', path: '/exams' },
+    { key: 'certifications', iconName: 'MdWorkspacePremium', label: 'Certifications', path: '/certifications' },
     { key: 'ai-tutor', iconName: 'MdLightbulb', label: 'AI Tutor', path: '/ai-tutor' },
     { key: 'communication', iconName: 'MdChat', label: 'Communication', path: '/communication' },
   ],
+
   student: [
     { key: 'dashboard', iconName: 'MdDashboard', label: 'Dashboard', path: '/dashboard' },
-    { key: 'lms', iconName: 'MdBook', label: 'Courses', path: '/lms' },
+    { key: 'lms', iconName: 'MdMenuBook', label: 'Courses', path: '/lms' },
+    { key: 'programs', iconName: 'MdBook', label: 'Programs', path: '/programs' },
     { key: 'attendance', iconName: 'MdAccessTime', label: 'Attendance', path: '/attendance' },
-    { key: 'exams', iconName: 'MdBook', label: 'Exams', path: '/exams' },
+    { key: 'exams', iconName: 'MdGrade', label: 'Exams', path: '/exams' },
+    { key: 'scholarships', iconName: 'MdCardGiftcard', label: 'Scholarships', path: '/scholarships' },
+    { key: 'certifications', iconName: 'MdWorkspacePremium', label: 'Certificates', path: '/certifications' },
+    { key: 'documents', iconName: 'MdFolderShared', label: 'My Documents', path: '/documents' },
     { key: 'ai-tutor', iconName: 'MdLightbulb', label: 'AI Tutor', path: '/ai-tutor' },
     { key: 'career-path', iconName: 'MdTrendingUp', label: 'Career Path', path: '/career-path' },
     { key: 'communication', iconName: 'MdChat', label: 'Messages', path: '/communication' },
   ],
+
   parent: [
     { key: 'dashboard', iconName: 'MdDashboard', label: 'Dashboard', path: '/dashboard' },
     { key: 'child', iconName: 'MdPerson', label: 'Profile', path: '/profile' },
     { key: 'attendance', iconName: 'MdAccessTime', label: 'Attendance', path: '/attendance' },
-    { key: 'exams', iconName: 'MdBook', label: 'Exams', path: '/exams' },
+    { key: 'exams', iconName: 'MdGrade', label: 'Exams', path: '/exams' },
     { key: 'performance-analysis', iconName: 'MdBarChart', label: 'Performance', path: '/performance-analysis' },
     { key: 'fees', iconName: 'MdAccountBalance', label: 'Fees', path: '/fees' },
+    { key: 'scholarships', iconName: 'MdCardGiftcard', label: 'Scholarships', path: '/scholarships' },
+    { key: 'certifications', iconName: 'MdWorkspacePremium', label: 'Certificates', path: '/certifications' },
     { key: 'communication', iconName: 'MdChat', label: 'Messages', path: '/communication' },
   ],
+
   staff: [
     { key: 'dashboard', iconName: 'MdDashboard', label: 'Dashboard', path: '/dashboard' },
-    { key: 'students', iconName: 'MdPeople', label: 'Students', path: '/students' },
+    { key: 'leads', iconName: 'MdContactPhone', label: 'Lead CRM', path: '/leads' },
     { key: 'admissions', iconName: 'MdBusiness', label: 'Admissions', path: '/admissions' },
-    { key: 'transport', iconName: 'MdDirectionsBus', label: 'Transport', path: '/transport' },
+    { key: 'students', iconName: 'MdPeople', label: 'Students', path: '/students' },
+    { key: 'documents', iconName: 'MdFolderShared', label: 'Documents', path: '/documents' },
+    { key: 'scholarships', iconName: 'MdCardGiftcard', label: 'Scholarships', path: '/scholarships' },
+    { key: 'referrals', iconName: 'MdHandshake', label: 'Referrals', path: '/referrals' },
     { key: 'fees', iconName: 'MdAccountBalance', label: 'Fees', path: '/fees' },
+    { key: 'transport', iconName: 'MdDirectionsBus', label: 'Transport', path: '/transport' },
+    { key: 'reports', iconName: 'MdAssessment', label: 'Reports', path: '/reports' },
     { key: 'communication', iconName: 'MdChat', label: 'Communication', path: '/communication' },
   ],
 };
@@ -196,8 +204,6 @@ export const MENU_ITEMS = {
 export default {
   API_BASE_URL,
   WS_URL,
-  SUPABASE_URL,
-  SUPABASE_KEY,
   OPENROUTER_API_KEY,
   FEATURES,
   INSTITUTION_TYPES,

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { MdSearch, MdLogout, MdPerson, MdSubdirectoryArrowLeft } from 'react-icons/md';
 import { useAuth } from '../../hooks/useAuth';
@@ -107,7 +108,10 @@ export default function CommandPalette({ open, onClose }) {
     return acc;
   }, {});
 
-  return (
+  // Portalled to <body>: MainLayout's ancestors set `perspective` and
+  // `will-change: transform` for the 3D shell, which gives fixed-position
+  // descendants a new containing block instead of the viewport.
+  return createPortal(
     <div
       className="fixed inset-0 z-[1100] flex items-start justify-center px-4 pt-[12vh] bg-slate-950/45 backdrop-blur-sm animate-fade-in"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
@@ -123,7 +127,7 @@ export default function CommandPalette({ open, onClose }) {
             placeholder="Search pages and actions..."
             className="flex-1 py-4 text-sm text-slate-900 placeholder-slate-400 bg-transparent outline-none"
           />
-          <kbd className="hidden sm:block text-[10px] font-bold text-slate-400 border border-slate-200 rounded px-1.5 py-0.5">ESC</kbd>
+          <kbd className="from-sm block text-[10px] font-bold text-slate-400 border border-slate-200 rounded px-1.5 py-0.5">ESC</kbd>
         </div>
 
         <div ref={listRef} className="max-h-[46vh] overflow-y-auto p-2">
@@ -169,6 +173,7 @@ export default function CommandPalette({ open, onClose }) {
           <span className="ml-auto">CyberMilo quick search</span>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

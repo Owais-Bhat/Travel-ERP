@@ -6,7 +6,7 @@ import Input from '../../components/Common/Input';
 import Modal from '../../components/Common/Modal';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import supabase from '../../lib/supabase';
+import api from '../../lib/api';
 import {
   MdAdd,
   MdArrowBack,
@@ -89,35 +89,27 @@ export default function LmsPage() {
   const loadCourses = useCallback(async () => {
     if (!profile?.institution_id) return;
     setLoadingCourses(true);
-    const { data, error } = await supabase
-      .from('courses')
-      .select('*, lessons(id)')
-      .eq('institution_id', profile.institution_id)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      notification.error('Failed to load courses: ' + error.message);
-    } else {
+    try {
+      const { data } = await api.get('/lms/courses');
       setCourses(data || []);
+    } catch (err) {
+      notification.error('Failed to load courses: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setLoadingCourses(false);
     }
-    setLoadingCourses(false);
   }, [profile?.institution_id]);
 
   const loadLessons = useCallback(async (courseId) => {
     if (!courseId) return;
     setLoadingLessons(true);
-    const { data, error } = await supabase
-      .from('lessons')
-      .select('*')
-      .eq('course_id', courseId)
-      .order('lesson_order', { ascending: true });
-
-    if (error) {
-      notification.error('Failed to load lessons: ' + error.message);
-    } else {
+    try {
+      const { data } = await api.get(`/lms/courses/${courseId}/lessons`);
       setLessons(data || []);
+    } catch (err) {
+      notification.error('Failed to load lessons: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setLoadingLessons(false);
     }
-    setLoadingLessons(false);
   }, []);
 
   useEffect(() => { loadCourses(); }, [loadCourses]);
@@ -148,23 +140,22 @@ export default function LmsPage() {
       return;
     }
     setSavingCourse(true);
-    const { error } = await supabase.from('courses').insert([{
-      institution_id: profile.institution_id,
-      title: courseForm.title,
-      description: courseForm.description,
-      subject: courseForm.subject,
-      class_name: courseForm.class_name,
-      is_published: false,
-    }]);
-    setSavingCourse(false);
-
-    if (error) {
-      notification.error('Failed to create course: ' + error.message);
-    } else {
+    try {
+      await api.post('/lms/courses', {
+        title: courseForm.title,
+        description: courseForm.description,
+        subject: courseForm.subject,
+        class_name: courseForm.class_name,
+        is_published: false,
+      });
       notification.success('Course created');
       setCreateCourseModal(false);
       setCourseForm({ title: '', description: '', subject: '', class_name: '' });
       loadCourses();
+    } catch (err) {
+      notification.error('Failed to create course: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setSavingCourse(false);
     }
   };
 
@@ -172,20 +163,17 @@ export default function LmsPage() {
 
   const togglePublish = async (course) => {
     setTogglingId(course.id);
-    const { error } = await supabase
-      .from('courses')
-      .update({ is_published: !course.is_published })
-      .eq('id', course.id);
-    setTogglingId(null);
-
-    if (error) {
-      notification.error('Failed to update: ' + error.message);
-    } else {
+    try {
+      await api.put(`/lms/courses/${course.id}`, { is_published: !course.is_published });
       notification.success(course.is_published ? 'Course unpublished' : 'Course published');
       loadCourses();
       if (activeCourse?.id === course.id) {
         setActiveCourse({ ...activeCourse, is_published: !course.is_published });
       }
+    } catch (err) {
+      notification.error('Failed to update: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -219,27 +207,25 @@ export default function LmsPage() {
     setSavingLesson(true);
 
     const payload = {
-      course_id: activeCourse.id,
       title: lessonForm.title,
       content: lessonForm.content,
       video_url: lessonForm.video_url,
-      lesson_order: parseInt(lessonForm.lesson_order) || 1,
+      lesson_order: parseInt(lessonForm.lesson_order, 10) || 1,
     };
 
-    let error;
-    if (editingLesson) {
-      ({ error } = await supabase.from('lessons').update(payload).eq('id', editingLesson.id));
-    } else {
-      ({ error } = await supabase.from('lessons').insert([payload]));
-    }
-    setSavingLesson(false);
-
-    if (error) {
-      notification.error('Failed to save lesson: ' + error.message);
-    } else {
+    try {
+      if (editingLesson) {
+        await api.put(`/lms/lessons/${editingLesson.id}`, payload);
+      } else {
+        await api.post(`/lms/courses/${activeCourse.id}/lessons`, payload);
+      }
       notification.success(editingLesson ? 'Lesson updated' : 'Lesson added');
       setLessonModal(false);
       loadLessons(activeCourse.id);
+    } catch (err) {
+      notification.error('Failed to save lesson: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setSavingLesson(false);
     }
   };
 
@@ -247,12 +233,12 @@ export default function LmsPage() {
 
   const handleDeleteLesson = async (lessonId) => {
     if (!window.confirm('Delete this lesson? This action cannot be undone.')) return;
-    const { error } = await supabase.from('lessons').delete().eq('id', lessonId);
-    if (error) {
-      notification.error('Delete failed: ' + error.message);
-    } else {
+    try {
+      await api.delete(`/lms/lessons/${lessonId}`);
       notification.success('Lesson deleted');
       loadLessons(activeCourse.id);
+    } catch (err) {
+      notification.error('Delete failed: ' + (err.response?.data?.error || err.message));
     }
   };
 
@@ -315,7 +301,7 @@ export default function LmsPage() {
                       <div className="flex items-center gap-3 text-xs text-white/40 mb-4 mt-auto">
                         <span className="flex items-center gap-1">
                           <MdVideoLibrary className="w-3.5 h-3.5" />
-                          {Array.isArray(course.lessons) ? course.lessons.length : 0} lesson(s)
+                          {Number(course.lesson_count) || 0} lesson(s)
                         </span>
                       </div>
 

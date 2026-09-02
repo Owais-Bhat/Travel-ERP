@@ -6,17 +6,28 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
-    "seed:demo": "node scripts/seed-demo-data.js",
-    "smoke:phase1": "node scripts/phase1-smoke-check.js"
+    "migrate": "node scripts/migrate.js",
+    "seed": "node scripts/seed-mysql.js",
+    "test": "node --test \"tests/**/*.test.js\"",
+    "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.106.1",
     "bcrypt": "^6.0.0",
+    "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.7.0",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
+    "morgan": "^1.12.0",
+    "multer": "^2.3.0",
     "mysql2": "^3.22.6",
-    "uuid": "^14.0.1"
+    "nodemailer": "^9.1.1",
+    "uuid": "^14.0.1",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "node-sql-parser": "^5.4.0"
   }
 }

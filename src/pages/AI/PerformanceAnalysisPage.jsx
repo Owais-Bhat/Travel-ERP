@@ -5,7 +5,7 @@ import Button from '../../components/Common/Button';
 import Input from '../../components/Common/Input';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import supabase from '../../lib/supabase';
+import api from '../../lib/api';
 import { analyzePerformance } from '../../lib/openrouter';
 import {
   RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer,
@@ -49,14 +49,14 @@ export default function PerformanceAnalysisPage() {
     setSelectedStudent(null);
     if (!val.trim() || val.length < 2) { setStudentResults([]); return; }
     setStudentLoading(true);
-    const { data } = await supabase
-      .from('students')
-      .select('id, first_name, last_name, admission_no, class_name')
-      .eq('institution_id', profile?.institution_id)
-      .or(`first_name.ilike.%${val}%,last_name.ilike.%${val}%,admission_no.ilike.%${val}%`)
-      .limit(8);
-    setStudentResults(data || []);
-    setStudentLoading(false);
+    try {
+      const { data } = await api.get('/students', { params: { search: val, pageSize: 8, page: 1 } });
+      setStudentResults(data?.data || []);
+    } catch {
+      setStudentResults([]);
+    } finally {
+      setStudentLoading(false);
+    }
   };
 
   // ─── Auto-load exam results for selected student ───────────────────
@@ -64,24 +64,23 @@ export default function PerformanceAnalysisPage() {
     setSelectedStudent(student);
     setStudentResults([]);
 
-    const { data: resultsData } = await supabase
-      .from('exam_results')
-      .select('*, exams(subject, total_marks, class_average)')
-      .eq('student_id', student.id)
-      .order('created_at', { ascending: false })
-      .limit(20);
+    try {
+      const { data } = await api.get(`/students/${student.id}/results`);
+      const results = data || [];
 
-    if (resultsData && resultsData.length > 0) {
-      const mapped = resultsData.map(r => ({
-        subject: r.exams?.subject || 'Unknown',
-        marks: String(r.marks_obtained || r.marks || ''),
-        totalMarks: String(r.exams?.total_marks || '100'),
-        classAverage: String(r.exams?.class_average || ''),
-      }));
-      setRows(mapped);
-      notification.success(`Loaded ${mapped.length} exam results`);
-    } else {
-      notification.info('No exam results found. You can enter marks manually below.');
+      if (results.length > 0) {
+        setRows(results.map((r) => ({
+          subject: r.subject || r.exam_title || 'Unknown',
+          marks: r.marks_obtained == null ? '' : String(r.marks_obtained),
+          totalMarks: String(r.total_marks ?? '100'),
+          classAverage: r.class_average == null ? '' : String(r.class_average),
+        })));
+        notification.success(`Loaded ${results.length} exam results`);
+      } else {
+        notification.info('No exam results found. You can enter marks manually below.');
+      }
+    } catch {
+      notification.info('Could not load exam results. You can enter marks manually below.');
     }
   };
 

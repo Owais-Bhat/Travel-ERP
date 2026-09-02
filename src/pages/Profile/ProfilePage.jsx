@@ -5,7 +5,7 @@ import MainLayout from '../../components/Layout/MainLayout';
 import GlassCard from '../../components/Common/GlassCard';
 import Button from '../../components/Common/Button';
 import Input from '../../components/Common/Input';
-import supabase from '../../lib/supabase';
+import api from '../../lib/api';
 import { MdPerson, MdLock, MdCamera } from 'react-icons/md';
 
 export default function ProfilePage() {
@@ -57,12 +57,19 @@ export default function ProfilePage() {
     if (Object.keys(errs).length > 0) { setPasswordErrors(errs); return; }
 
     setSavingPassword(true);
-    const { error } = await supabase.auth.updateUser({ password: passwordForm.newPassword });
-    setSavingPassword(false);
-    if (error) notification.error(error.message);
-    else {
+    try {
+      // The API verifies the current password before rotating it — the old
+      // Supabase call changed it on session trust alone.
+      await api.put('/auth/password', {
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      });
       notification.success('Password changed successfully');
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (err) {
+      notification.error(err.response?.data?.error || err.message);
+    } finally {
+      setSavingPassword(false);
     }
   };
 

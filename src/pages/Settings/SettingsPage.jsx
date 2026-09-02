@@ -5,15 +5,27 @@ import MainLayout from '../../components/Layout/MainLayout';
 import GlassCard from '../../components/Common/GlassCard';
 import Button from '../../components/Common/Button';
 import Input from '../../components/Common/Input';
-import supabase from '../../lib/supabase';
+import api from '../../lib/api';
 import { fetchInstitutionUsers, inviteInstitutionUser, updateInstitutionUser } from '../../lib/usersApi';
-import { MdBusiness, MdPeople, MdSettings, MdAdd, MdDelete, MdEmail } from 'react-icons/md';
+import { fetchRoleFeatures, saveRoleFeatures } from '../../lib/institutionsApi';
+import {
+  MdBusiness, MdPeople, MdSettings, MdAdd, MdDelete, MdEmail, MdShield,
+  MdContentCopy, MdCheck, MdWarning,
+} from 'react-icons/md';
 
 const TABS = [
   { key: 'institution', label: 'Institution', icon: MdBusiness },
   { key: 'users', label: 'Users & Roles', icon: MdPeople },
+  { key: 'roleAccess', label: 'Role Access', icon: MdShield },
   { key: 'modules', label: 'Modules', icon: MdSettings },
 ];
+
+const ROLE_LABELS = {
+  teacher: 'Teacher',
+  student: 'Student',
+  parent: 'Parent',
+  staff: 'Staff',
+};
 
 const MODULES = [
   { key: 'lms', label: 'Learning Management (LMS)', description: 'Courses, lessons, content delivery' },
@@ -35,24 +47,43 @@ export default function SettingsPage() {
   const [institution, setInstitution] = useState({ name: '', type: '', address: '', phone: '', email: '' });
   const [users, setUsers] = useState([]);
   const [modules, setModules] = useState({});
+  const [plan, setPlan] = useState('free');
+  const [planLimits, setPlanLimits] = useState(null);
 
   const [inviteForm, setInviteForm] = useState({ email: '', role: 'teacher', firstName: '', lastName: '' });
   const [inviting, setInviting] = useState(false);
+  // Set only when an invite's email failed to send, so the admin has a
+  // fallback way to hand the temporary password to the new user.
+  const [lastInvite, setLastInvite] = useState(null);
+  const [passwordCopied, setPasswordCopied] = useState(false);
+
+  const copyInvitePassword = async () => {
+    if (!lastInvite?.temporaryPassword) return;
+    await navigator.clipboard.writeText(lastInvite.temporaryPassword);
+    setPasswordCopied(true);
+    setTimeout(() => setPasswordCopied(false), 2000);
+  };
+
+  // ── Role access ──────────────────────────────────────────────
+  const [roleFeatureCatalog, setRoleFeatureCatalog] = useState([]);
+  const [restrictableRoles, setRestrictableRoles] = useState([]);
+  const [roleFeatures, setRoleFeatures] = useState({});
+  const [activeRole, setActiveRole] = useState('teacher');
+  const [loadingRoleFeatures, setLoadingRoleFeatures] = useState(false);
+  const [savingRoleFeatures, setSavingRoleFeatures] = useState(false);
 
   useEffect(() => {
     if (profile?.institution_id) {
       loadInstitution();
       if (activeTab === 'users') loadUsers();
+      if (activeTab === 'roleAccess') loadRoleFeatures();
     }
   }, [profile?.institution_id, activeTab]);
 
   const loadInstitution = async () => {
-    const { data, error } = await supabase
-      .from('institutions')
-      .select('*')
-      .eq('id', profile.institution_id)
-      .single();
-    if (data) {
+    try {
+      const { data } = await api.get('/institutions/current');
+      if (!data) return;
       setInstitution({
         name: data.name || '',
         type: data.type || '',
@@ -61,9 +92,63 @@ export default function SettingsPage() {
         email: data.email || '',
         settings: data.settings || {},
       });
-      setModules(data.settings?.modules || {});
+      // `enabled_modules` is the resolved plan + override map from the
+      // server; module availability is set by the plan, not by the tenant.
+      setModules(data.enabled_modules || data.settings?.modules || {});
+      setPlan(data.subscription_plan || 'free');
+      setPlanLimits(data.plan_limits || null);
+    } catch (err) {
+      notification.error(err.response?.data?.error || 'Failed to load institution settings');
     }
-    if (error) notification.error('Failed to load institution settings');
+  };
+
+  const loadRoleFeatures = async () => {
+    setLoadingRoleFeatures(true);
+    try {
+      const data = await fetchRoleFeatures();
+      setRoleFeatureCatalog(data.catalog || []);
+      setRestrictableRoles(data.roles || []);
+      setRoleFeatures(data.roleFeatures || {});
+      if (data.roles?.length) setActiveRole((r) => (data.roles.includes(r) ? r : data.roles[0]));
+    } catch (err) {
+      notification.error(err.response?.data?.error || 'Failed to load role access settings');
+    } finally {
+      setLoadingRoleFeatures(false);
+    }
+  };
+
+  /** Keys currently checked for a role — every plan feature when unrestricted. */
+  const activeKeysFor = (role) => (
+    Array.isArray(roleFeatures[role]) ? roleFeatures[role] : roleFeatureCatalog.map((f) => f.key)
+  );
+
+  const toggleRoleFeature = (role, key) => {
+    setRoleFeatures((prev) => {
+      const current = Array.isArray(prev[role]) ? prev[role] : roleFeatureCatalog.map((f) => f.key);
+      const next = current.includes(key) ? current.filter((k) => k !== key) : [...current, key];
+      return { ...prev, [role]: next };
+    });
+  };
+
+  const resetRoleToFullAccess = (role) => {
+    setRoleFeatures((prev) => {
+      const next = { ...prev };
+      delete next[role];
+      return next;
+    });
+  };
+
+  const saveRoleAccess = async () => {
+    setSavingRoleFeatures(true);
+    try {
+      const data = await saveRoleFeatures(roleFeatures);
+      setRoleFeatures(data.roleFeatures || {});
+      notification.success('Role access updated');
+    } catch (err) {
+      notification.error(err.response?.data?.error || 'Failed to save role access');
+    } finally {
+      setSavingRoleFeatures(false);
+    }
   };
 
   const loadUsers = async () => {
@@ -79,24 +164,20 @@ export default function SettingsPage() {
 
   const saveInstitution = async () => {
     setSaving(true);
-    const { error } = await supabase
-      .from('institutions')
-      .update({ name: institution.name, type: institution.type, address: institution.address, phone: institution.phone, email: institution.email })
-      .eq('id', profile.institution_id);
-    setSaving(false);
-    if (error) notification.error('Failed to save: ' + error.message);
-    else notification.success('Institution settings saved');
-  };
-
-  const saveModules = async () => {
-    setSaving(true);
-    const { error } = await supabase
-      .from('institutions')
-      .update({ settings: { ...(institution.settings || {}), modules } })
-      .eq('id', profile.institution_id);
-    setSaving(false);
-    if (error) notification.error('Failed to save modules');
-    else notification.success('Module settings saved');
+    try {
+      await api.put('/institutions/profile', {
+        name: institution.name,
+        type: institution.type,
+        address: institution.address,
+        phone: institution.phone,
+        email: institution.email,
+      });
+      notification.success('Institution settings saved');
+    } catch (err) {
+      notification.error('Failed to save: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const inviteUser = async () => {
@@ -106,7 +187,7 @@ export default function SettingsPage() {
     }
     setInviting(true);
     try {
-      await inviteInstitutionUser({
+      const data = await inviteInstitutionUser({
         email: inviteForm.email,
         role: inviteForm.role,
         firstName: inviteForm.firstName,
@@ -114,11 +195,24 @@ export default function SettingsPage() {
         institutionId: profile.institution_id,
       });
 
-      notification.success(`Invitation sent to ${inviteForm.email}`);
+      if (data.emailSent) {
+        notification.success(`Invitation emailed to ${inviteForm.email}`);
+        setLastInvite(null);
+      } else {
+        // No SMTP configured, or the send failed — the account still
+        // exists, so the admin needs the password to hand over some other
+        // way. Keep it on screen (not just a toast) until they copy it.
+        notification.warning('Account created, but the invite email could not be sent. Copy the password below.', 8000);
+        setLastInvite(data);
+      }
+
       setInviteForm({ email: '', role: 'teacher', firstName: '', lastName: '' });
       loadUsers();
+      loadInstitution();
     } catch (err) {
-      notification.error('Invite failed: ' + err.message);
+      // The plan-limit message and other server errors live on the axios
+      // response body, not err.message (which is a generic status string).
+      notification.error(err.response?.data?.error || 'Invite failed: ' + err.message);
     } finally {
       setInviting(false);
     }
@@ -130,7 +224,7 @@ export default function SettingsPage() {
       notification.success('User deactivated');
       loadUsers();
     } catch (error) {
-      notification.error('Failed to deactivate user: ' + error.message);
+      notification.error(error.response?.data?.error || 'Failed to deactivate user: ' + error.message);
     }
   };
 
@@ -140,7 +234,7 @@ export default function SettingsPage() {
       notification.success('User reactivated');
       loadUsers();
     } catch (error) {
-      notification.error('Failed to reactivate user: ' + error.message);
+      notification.error(error.response?.data?.error || 'Failed to reactivate user: ' + error.message);
     }
   };
 
@@ -150,13 +244,12 @@ export default function SettingsPage() {
       notification.success('Role updated');
       loadUsers();
     } catch (error) {
-      notification.error('Failed to update role: ' + error.message);
+      notification.error(error.response?.data?.error || 'Failed to update role: ' + error.message);
     }
   };
 
-  const toggleModule = (key) => {
-    setModules(prev => ({ ...prev, [key]: !prev[key] }));
-  };
+  const activeUserCount = users.filter((u) => u.is_active).length;
+  const userLimitReached = planLimits && planLimits.users !== null && activeUserCount >= planLimits.users;
 
   const ROLE_OPTIONS = ['institution_admin', 'principal', 'teacher', 'student', 'parent', 'staff'];
 
@@ -214,7 +307,27 @@ export default function SettingsPage() {
           <div className="space-y-6">
             {/* Invite form */}
             <GlassCard className="p-6">
-              <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><MdAdd /> Invite User</h2>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h2 className="text-lg font-bold text-white flex items-center gap-2 mb-0"><MdAdd /> Invite User</h2>
+                {planLimits && (
+                  <span
+                    className={`neu-badge ${userLimitReached ? 'neu-badge-danger' : ''}`}
+                    title="Active users against your plan's seat limit"
+                  >
+                    {activeUserCount} / {planLimits.users === null ? '∞' : planLimits.users} seats used
+                  </span>
+                )}
+              </div>
+
+              {userLimitReached && (
+                <div className="neu-alert neu-alert-warning mb-4">
+                  <span>
+                    Your <strong style={{ textTransform: 'capitalize' }}>{plan}</strong> plan is at its
+                    {' '}{planLimits.users}-user limit. Deactivate someone or upgrade your plan to invite more.
+                  </span>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Input placeholder="First Name" value={inviteForm.firstName} onChange={e => setInviteForm(p => ({ ...p, firstName: e.target.value }))} />
                 <Input placeholder="Last Name" value={inviteForm.lastName} onChange={e => setInviteForm(p => ({ ...p, lastName: e.target.value }))} />
@@ -226,9 +339,35 @@ export default function SettingsPage() {
                   </select>
                 </div>
               </div>
-              <Button variant="primary" onClick={inviteUser} loading={inviting} className="mt-4">
+              <Button variant="primary" onClick={inviteUser} loading={inviting} disabled={userLimitReached} className="mt-4">
                 <MdEmail className="mr-2 inline" /> Send Invitation
               </Button>
+
+              {lastInvite && (
+                <div className="neu-alert neu-alert-warning mt-4">
+                  <MdWarning className="w-5 h-5 shrink-0" style={{ color: 'var(--neu-amber)' }} />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold mb-1" style={{ color: 'var(--neu-ink)' }}>
+                      Couldn&apos;t email {lastInvite.email} — share this password yourself
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <code
+                        className="text-sm px-2 py-1"
+                        style={{ borderRadius: 'var(--neu-radius-sm)', boxShadow: 'var(--neu-inset-subtle)' }}
+                      >
+                        {lastInvite.temporaryPassword}
+                      </code>
+                      <button type="button" onClick={copyInvitePassword} className="neu-btn neu-btn-xs">
+                        {passwordCopied ? <MdCheck className="w-3.5 h-3.5" /> : <MdContentCopy className="w-3.5 h-3.5" />}
+                        {passwordCopied ? 'Copied' : 'Copy'}
+                      </button>
+                      <button type="button" onClick={() => setLastInvite(null)} className="neu-btn neu-btn-ghost neu-btn-xs">
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </GlassCard>
 
             {/* Users table */}
@@ -292,45 +431,138 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* Modules */}
+        {/* Role Access — tenant admin narrows what a role can see, within the plan */}
+        {activeTab === 'roleAccess' && (
+          <div className="space-y-6">
+            <GlassCard className="p-6 space-y-4">
+              <div>
+                <h2 className="text-lg font-bold" style={{ color: 'var(--neu-ink)' }}>Role access</h2>
+                <p className="text-sm mb-0" style={{ color: 'var(--neu-ink-muted)' }}>
+                  Choose which modules each role can use, inside what your plan already includes.
+                  A role with no restriction gets everything the plan offers. Institution admins and
+                  principals always have full access, since they are the ones setting this up.
+                </p>
+              </div>
+
+              {loadingRoleFeatures ? (
+                <div className="neu-skeleton h-40" />
+              ) : restrictableRoles.length === 0 ? (
+                <p className="text-sm mb-0" style={{ color: 'var(--neu-ink-muted)' }}>Nothing to configure yet.</p>
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    {restrictableRoles.map((role) => {
+                      const restricted = Array.isArray(roleFeatures[role]);
+                      const active = activeRole === role;
+                      return (
+                        <button
+                          key={role}
+                          type="button"
+                          onClick={() => setActiveRole(role)}
+                          className="neu-btn neu-btn-sm"
+                          style={active ? { boxShadow: 'var(--neu-inset)', color: 'var(--neu-primary)', fontWeight: 700 } : undefined}
+                        >
+                          {ROLE_LABELS[role] || role}
+                          {restricted && (
+                            <span
+                              className="neu-badge neu-badge-plain"
+                              style={{ marginLeft: '0.4rem', padding: '0.1rem 0.5rem' }}
+                            >
+                              restricted
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm mb-0" style={{ color: 'var(--neu-ink-muted)' }}>
+                      {Array.isArray(roleFeatures[activeRole])
+                        ? `${ROLE_LABELS[activeRole]} is restricted to ${roleFeatures[activeRole].length} of ${roleFeatureCatalog.length} modules.`
+                        : `${ROLE_LABELS[activeRole]} currently has full access to every module in your plan.`}
+                    </p>
+                    {Array.isArray(roleFeatures[activeRole]) && (
+                      <Button variant="ghost" size="sm" onClick={() => resetRoleToFullAccess(activeRole)}>
+                        Reset to full access
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    {roleFeatureCatalog.map((feature) => {
+                      const enabled = activeKeysFor(activeRole).includes(feature.key);
+                      return (
+                        <button
+                          key={feature.key}
+                          type="button"
+                          onClick={() => toggleRoleFeature(activeRole, feature.key)}
+                          className="flex items-center justify-between gap-3 p-3 text-left"
+                          style={{ borderRadius: 'var(--neu-radius)', boxShadow: enabled ? 'var(--neu-e1)' : 'var(--neu-inset)' }}
+                        >
+                          <span style={{ color: 'var(--neu-ink)' }}>{feature.label}</span>
+                          <span
+                            className={`neu-badge ${enabled ? 'neu-badge-success' : ''}`}
+                            style={{ flexShrink: 0 }}
+                          >
+                            {enabled ? 'Allowed' : 'Blocked'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <Button variant="primary" onClick={saveRoleAccess} loading={savingRoleFeatures}>
+                    Save role access
+                  </Button>
+                </>
+              )}
+            </GlassCard>
+          </div>
+        )}
+
+        {/* Modules — read-only: entitlement belongs to the plan, not the tenant */}
         {activeTab === 'modules' && (
           <GlassCard className="p-6 space-y-4">
-            <h2 className="text-lg font-bold text-white">Enable / Disable Modules</h2>
-            <p className="text-white/60 text-sm">Control which features are available in your institution's CyberMilo.</p>
-            <div className="space-y-3">
-              {MODULES.map(mod => {
-                const enabled = modules[mod.key] !== false;
-                return (
-                <div key={mod.key} className="flex items-center justify-between gap-4 p-4 rounded-lg bg-slate-50 border border-slate-200">
-                  <div className="min-w-0">
-                    <p className="text-white font-medium">{mod.label}</p>
-                    <p className="text-white/50 text-sm">{mod.description}</p>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={enabled}
-                    aria-label={`${enabled ? 'Disable' : 'Enable'} ${mod.label}`}
-                    onClick={() => toggleModule(mod.key)}
-                    className={`relative inline-flex h-7 w-14 shrink-0 items-center rounded-full border transition-colors focus:outline-none focus:ring-4 focus:ring-[#0E7C7B]/15 ${
-                      enabled
-                        ? 'bg-[#0E7C7B] border-[#0E7C7B]'
-                        : 'bg-slate-300 border-slate-300'
-                    }`}
-                  >
-                    <span
-                      className={`absolute left-1 h-5 w-5 rounded-full bg-white shadow-md transition-transform ${
-                        enabled ? 'translate-x-7' : 'translate-x-0'
-                      }`}
-                    />
-                    <span className={`absolute text-[10px] font-bold ${enabled ? 'left-2 text-white' : 'right-2 text-slate-600'}`}>
-                      {enabled ? 'ON' : 'OFF'}
-                    </span>
-                  </button>
-                </div>
-              )})}
+            <div>
+              <h2 className="text-lg font-bold" style={{ color: 'var(--neu-ink)' }}>Modules in your plan</h2>
+              <p className="text-sm mb-0" style={{ color: 'var(--neu-ink-muted)' }}>
+                Module access is set by your subscription. Toggling it here used to write straight
+                to the institution record, which let any account unlock paid features — so it is now
+                controlled from the platform console.
+              </p>
             </div>
-            <Button variant="primary" onClick={saveModules} loading={saving}>Save Module Settings</Button>
+
+            <div className="neu-alert neu-alert-info">
+              <span>
+                Current plan: <strong style={{ textTransform: 'capitalize' }}>{plan}</strong>.
+                To add a module, contact your CyberMilo account manager.
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {MODULES.map((mod) => {
+                const enabled = modules[mod.key] === true;
+                return (
+                  <div
+                    key={mod.key}
+                    className="flex items-center justify-between gap-4 p-4 neu-inset"
+                    style={{ borderRadius: 'var(--neu-radius)' }}
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium mb-0" style={{ color: 'var(--neu-ink)' }}>{mod.label}</p>
+                      <p className="text-sm mb-0" style={{ color: 'var(--neu-ink-muted)' }}>{mod.description}</p>
+                    </div>
+                    <span
+                      className={`neu-badge ${enabled ? 'neu-badge-success' : ''}`}
+                      style={{ flexShrink: 0 }}
+                    >
+                      {enabled ? 'Included' : 'Not in plan'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </GlassCard>
         )}
       </div>

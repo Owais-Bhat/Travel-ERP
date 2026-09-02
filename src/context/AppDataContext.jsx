@@ -1,7 +1,7 @@
 import { createContext, useState, useEffect, useContext, useCallback } from 'react';
 import api from '../lib/api';
 import { AuthContext } from './AuthContext';
-import { getPlanFeatureMap, isFeatureEnabled } from '../saas/features';
+import { getPlanFeatureMap, isFeatureEnabledForRole } from '../saas/features';
 
 export const AppDataContext = createContext();
 
@@ -409,8 +409,8 @@ export function AppDataProvider({ children }) {
     institution?.settings?.modules || {}
   );
   const hasFeature = useCallback(
-    (featureKey) => isFeatureEnabled(institution, featureKey),
-    [institution]
+    (featureKey) => isFeatureEnabledForRole(institution, profile?.role, featureKey),
+    [institution, profile?.role]
   );
 
   // ── Context value ──────────────────────────────────────────

@@ -31,7 +31,13 @@ router.get('/stats', async (req, res) => {
     const totalFeesCollected = Number(feesResult[0]?.collected || 0);
     const totalFeesDue = Number(feesResult[0]?.total || 0) - totalFeesCollected;
 
-    const [examsResult] = await db.execute('SELECT COUNT(*) as count FROM exams WHERE institution_id = ? AND status = ?', [institutionId, 'active']);
+    // Exam statuses are upcoming/ongoing/completed/cancelled/published — the
+    // previous query looked for 'active', which never matches, so this tile
+    // always read zero.
+    const [examsResult] = await db.execute(
+      "SELECT COUNT(*) as count FROM exams WHERE institution_id = ? AND status IN ('upcoming', 'ongoing')",
+      [institutionId]
+    );
     const activeExams = examsResult[0].count;
 
     res.json({

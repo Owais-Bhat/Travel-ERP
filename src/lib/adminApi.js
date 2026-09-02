@@ -1,90 +1,54 @@
-import supabase from './supabase';
-import { API_BASE_URL } from '../config';
+import api from './api';
 
-async function getAccessToken() {
-  const { data, error } = await supabase.auth.getSession();
-  if (error) throw error;
-  const token = data?.session?.access_token;
-  if (!token) throw new Error('You must be signed in as a super admin');
-  return token;
-}
+/**
+ * Platform (super-admin) console API.
+ *
+ * Ported off Supabase Auth — the shared axios client already attaches the
+ * JWT from localStorage, so there is no session lookup to do here.
+ */
+const unwrap = (promise) => promise.then((response) => response.data);
 
-async function adminRequest(path, options = {}) {
-  const token = await getAccessToken();
-  const response = await fetch(`${API_BASE_URL}/admin${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...(options.headers || {}),
-    },
-  });
+export const fetchAdminInstitutions = () => unwrap(api.get('/admin/institutions'));
+export const fetchAdminFeatures = () => unwrap(api.get('/admin/features'));
+export const fetchAdminUsage = () => unwrap(api.get('/admin/usage'));
 
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.error || `Admin API failed with ${response.status}`);
-  }
-  return payload;
-}
+export const fetchAdminAudit = (params = {}) =>
+  unwrap(api.get('/admin/audit', { params }));
 
-export function fetchAdminInstitutions() {
-  return adminRequest('/institutions');
-}
+export const createAdminInstitution = (data) =>
+  unwrap(api.post('/admin/institutions', data));
 
-export function fetchAdminFeatures() {
-  return adminRequest('/features');
-}
+export const changeInstitutionPlan = (data) =>
+  unwrap(api.post('/admin/change-plan', data));
 
-export function fetchAdminUsage() {
-  return adminRequest('/usage');
-}
+export const updateInstitutionSubscription = (data) =>
+  unwrap(api.post('/admin/subscription', data));
 
-export function fetchAdminAudit(params = {}) {
-  const query = new URLSearchParams();
-  if (params.limit) query.set('limit', params.limit);
-  if (params.institutionId) query.set('institutionId', params.institutionId);
-  const suffix = query.toString() ? `?${query.toString()}` : '';
-  return adminRequest(`/audit${suffix}`);
-}
+export const suspendInstitution = (data) =>
+  unwrap(api.post('/admin/suspend-institution', data));
 
-export function createAdminInstitution(data) {
-  return adminRequest('/institutions', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
+export const setInstitutionFeature = (data) =>
+  unwrap(api.post('/admin/set-feature', data));
 
-export function inviteInstitutionUser(data) {
-  return adminRequest('/invite-user', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
+// --- institution verification (EIMS) ---------------------------------
+export const fetchVerificationQueue = (status) =>
+  unwrap(api.get('/admin/verifications', { params: status ? { status } : {} }));
 
-export function changeInstitutionPlan(data) {
-  return adminRequest('/change-plan', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
+export const fetchVerificationDocuments = (institutionId) =>
+  unwrap(api.get(`/admin/verifications/${institutionId}/documents`));
 
-export function updateInstitutionSubscription(data) {
-  return adminRequest('/subscription', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
+export const decideVerification = (institutionId, data) =>
+  unwrap(api.post(`/admin/verifications/${institutionId}`, data));
 
-export function suspendInstitution(data) {
-  return adminRequest('/suspend-institution', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
+export const reviewInstitutionDocument = (documentId, data) =>
+  unwrap(api.post(`/admin/documents/${documentId}/review`, data));
 
-export function setInstitutionFeature(data) {
-  return adminRequest('/set-feature', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
+/**
+ * Provisioning a tenant used to be a Supabase invite; the MySQL backend
+ * creates the admin account directly, so this delegates to the tenant-user
+ * endpoint and returns the one-time temporary password.
+ */
+export const inviteInstitutionUser = (data) =>
+  unwrap(api.post('/users/invite', data, {
+    headers: data.institutionId ? { 'X-Institution-Id': data.institutionId } : undefined,
+  }));

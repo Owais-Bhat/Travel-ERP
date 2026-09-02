@@ -1,0 +1,128 @@
+/* ============================================================
+   Legacy palette bridge
+   ------------------------------------------------------------
+   The module pages that predate the neumorphic system were written
+   against a dark glass theme: `text-white`, `text-white/60`,
+   `bg-white/5`, `border-white/10`, `text-slate-950` and friends are
+   baked into roughly a thousand places across those files.
+
+   Rewriting every one of them by hand would be a large, risky diff for
+   no visual gain, so this layer remaps that palette onto the neumorphic
+   ink scale instead. It is scoped to the app shell and the auth screens
+   rather than applied globally.
+
+   Carve-outs: anything sitting on a real colour — primary and danger
+   buttons, gradient tiles, arbitrary `bg-[#...]` chips — keeps its white
+   text, because there the contrast is correct already.
+
+   New code should use the `--neu-*` tokens directly and ignore this file;
+   it exists so the old pages read correctly in both themes.
+   ============================================================ */
+
+.app-content,
+.auth-shell {
+  color: var(--neu-ink);
+}
+
+/* --- headings and solid white text ------------------------- */
+.app-content .text-white:not([class*='bg-gradient']):not([class*='bg-[']):not(.btn-primary):not(.btn-danger):not(.neu-btn-primary):not(.neu-btn-danger),
+.auth-shell .text-white:not([class*='bg-gradient']):not([class*='bg-[']):not(.btn-primary):not(.btn-danger) {
+  color: var(--neu-ink);
+}
+
+/* --- muted white (the old /40 … /80 opacity scale) --------- */
+.app-content [class*='text-white/']:not([class*='bg-gradient']):not([class*='bg-[']),
+.auth-shell [class*='text-white/']:not([class*='bg-gradient']):not([class*='bg-[']) {
+  color: var(--neu-ink-soft);
+}
+
+.app-content .text-white\/50,
+.app-content .text-white\/40,
+.app-content .text-white\/30,
+.app-content .text-white\/25 {
+  color: var(--neu-ink-muted);
+}
+
+/* --- the slate scale --------------------------------------- */
+.app-content .text-slate-950,
+.app-content .text-slate-900,
+.app-content .text-slate-800 { color: var(--neu-ink); }
+
+.app-content .text-slate-700,
+.app-content .text-slate-600 { color: var(--neu-ink-soft); }
+
+.app-content .text-slate-500,
+.app-content .text-slate-400,
+.app-content .text-slate-300 { color: var(--neu-ink-muted); }
+
+/* --- translucent fills become carved wells ------------------ */
+.app-content [class*='bg-white/']:not([class*='bg-gradient']),
+.auth-shell [class*='bg-white/']:not([class*='bg-gradient']) {
+  background: var(--neu-bg);
+  box-shadow: var(--neu-inset-subtle);
+}
+
+.app-content .bg-slate-50,
+.app-content .bg-slate-100 {
+  background: var(--neu-bg);
+}
+
+/* --- borders ------------------------------------------------ */
+.app-content [class*='border-white/'],
+.app-content [class*='border-slate-'],
+.auth-shell [class*='border-white/'] {
+  border-color: var(--neu-line);
+}
+
+/* --- the old accent utilities ------------------------------- */
+.app-content .text-neon-cyan { color: var(--neu-teal); }
+.app-content .text-primary-blue { color: var(--neu-primary); }
+.app-content .border-neon-cyan { border-color: var(--neu-teal); }
+
+/* --- status tints ------------------------------------------
+   These carried both a tint and a translucent fill; keep the hue,
+   drop the fill so they sit on the material like every other pill. */
+.app-content [class*='text-emerald-'] { color: var(--neu-success); }
+.app-content [class*='text-red-'] { color: var(--neu-danger); }
+.app-content [class*='text-amber-'],
+.app-content [class*='text-orange-'] { color: var(--neu-amber); }
+.app-content [class*='text-blue-'],
+.app-content [class*='text-indigo-'] { color: var(--neu-primary); }
+.app-content [class*='text-purple-'],
+.app-content [class*='text-violet-'] { color: var(--neu-violet); }
+
+.app-content [class*='bg-emerald-'],
+.app-content [class*='bg-red-'],
+.app-content [class*='bg-amber-'],
+.app-content [class*='bg-orange-'],
+.app-content [class*='bg-blue-'],
+.app-content [class*='bg-indigo-'],
+.app-content [class*='bg-purple-'],
+.app-content [class*='bg-violet-'],
+.app-content [class*='bg-gray-'] {
+  background: transparent;
+  box-shadow: var(--neu-inset-subtle);
+  border-color: transparent;
+}
+
+/* Buttons and gradient tiles keep their own colour and white text. */
+.app-content .btn-primary,
+.app-content .btn-danger,
+.app-content .neu-btn-primary,
+.app-content .neu-btn-danger,
+.app-content [class*='bg-gradient'] {
+  box-shadow: unset;
+}
+
+.app-content .btn-primary,
+.app-content .neu-btn-primary {
+  box-shadow:
+    5px 5px 12px var(--neu-shadow),
+    -5px -5px 12px var(--neu-light),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.app-content [class*='bg-gradient'] .text-white,
+.app-content [class*='bg-gradient'] {
+  color: #fff;
+}

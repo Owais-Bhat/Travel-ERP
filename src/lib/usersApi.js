@@ -1,47 +1,31 @@
-import supabase from './supabase';
-import { API_BASE_URL } from '../config';
+import api from './api';
 
-async function getAccessToken() {
-  const { data, error } = await supabase.auth.getSession();
-  if (error) throw error;
-  const token = data?.session?.access_token;
-  if (!token) throw new Error('You must be signed in');
-  return token;
+/**
+ * Tenant user management.
+ *
+ * A super admin acts inside a tenant by naming it; the backend's tenant
+ * middleware reads that from the X-Institution-Id header.
+ */
+const scoped = (institutionId) =>
+  (institutionId ? { headers: { 'X-Institution-Id': institutionId } } : {});
+
+export async function fetchInstitutionUsers(institutionId) {
+  const response = await api.get('/users', scoped(institutionId));
+  return response.data;
 }
 
-async function userRequest(path, options = {}) {
-  const token = await getAccessToken();
-  const response = await fetch(`${API_BASE_URL}/users${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...(options.headers || {}),
-    },
-  });
-
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.error || `Users API failed with ${response.status}`);
-  }
-  return payload;
+/** Returns `{ profile, email, temporaryPassword }` — the password is shown once. */
+export async function inviteInstitutionUser({ institutionId, ...data }) {
+  const response = await api.post('/users/invite', data, scoped(institutionId));
+  return response.data;
 }
 
-export function fetchInstitutionUsers(institutionId) {
-  const query = institutionId ? `?institutionId=${encodeURIComponent(institutionId)}` : '';
-  return userRequest(`/${query}`);
+export async function updateInstitutionUser(profileId, { institutionId, ...data }) {
+  const response = await api.patch(`/users/${profileId}`, data, scoped(institutionId));
+  return response.data;
 }
 
-export function inviteInstitutionUser(data) {
-  return userRequest('/invite', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
-export function updateInstitutionUser(profileId, data) {
-  return userRequest(`/${profileId}`, {
-    method: 'PATCH',
-    body: JSON.stringify(data),
-  });
+export async function resetInstitutionUserPassword(profileId, institutionId) {
+  const response = await api.post(`/users/${profileId}/reset-password`, {}, scoped(institutionId));
+  return response.data;
 }

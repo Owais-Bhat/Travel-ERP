@@ -41,15 +41,78 @@ export const getStatusColor = (status) => {
   return colors[status] || 'gray';
 };
 
+/**
+ * Map a status string onto a neumorphic badge tone.
+ *
+ * `color` is a `neu-badge-*` modifier, not a Tailwind class — the badge
+ * carries its tone through the text and dot colour, since a low-contrast
+ * material cannot also carry a coloured fill.
+ */
+const STATUS_TONES = {
+  // generic
+  active: ['Active', 'success'],
+  inactive: ['Inactive', 'neutral'],
+  pending: ['Pending', 'warning'],
+  success: ['Success', 'success'],
+  failed: ['Failed', 'danger'],
+  draft: ['Draft', 'neutral'],
+  archived: ['Archived', 'neutral'],
+  cancelled: ['Cancelled', 'danger'],
+
+  // review workflows
+  submitted: ['Submitted', 'info'],
+  under_review: ['Under review', 'info'],
+  approved: ['Approved', 'success'],
+  rejected: ['Rejected', 'danger'],
+  verified: ['Verified', 'success'],
+  withdrawn: ['Withdrawn', 'neutral'],
+
+  // admissions + CRM
+  new: ['New', 'info'],
+  contacted: ['Contacted', 'info'],
+  qualified: ['Qualified', 'violet'],
+  proposal: ['Proposal', 'violet'],
+  won: ['Won', 'success'],
+  lost: ['Lost', 'danger'],
+  converted: ['Converted', 'success'],
+  expired: ['Expired', 'neutral'],
+
+  // money
+  invoiced: ['Invoiced', 'info'],
+  issued: ['Issued', 'info'],
+  paid: ['Paid', 'success'],
+  disbursed: ['Disbursed', 'success'],
+  overdue: ['Overdue', 'danger'],
+  past_due: ['Past due', 'danger'],
+  void: ['Void', 'neutral'],
+  revoked: ['Revoked', 'danger'],
+
+  // subscriptions
+  trialing: ['Trial', 'info'],
+  suspended: ['Suspended', 'danger'],
+  open: ['Open', 'success'],
+  closed: ['Closed', 'neutral'],
+  paused: ['Paused', 'warning'],
+  blocked: ['Blocked', 'danger'],
+};
+
+const TONE_CLASS = {
+  success: 'neu-badge-success',
+  warning: 'neu-badge-warning',
+  danger: 'neu-badge-danger',
+  info: 'neu-badge-info',
+  violet: 'neu-badge-violet',
+  neutral: '',
+};
+
 export const getStatusBadge = (status) => {
-  const badges = {
-    active: { label: 'Active', color: 'bg-emerald-500/20 text-emerald-300' },
-    inactive: { label: 'Inactive', color: 'bg-gray-500/20 text-gray-300' },
-    pending: { label: 'Pending', color: 'bg-amber-500/20 text-amber-300' },
-    success: { label: 'Success', color: 'bg-emerald-500/20 text-emerald-300' },
-    failed: { label: 'Failed', color: 'bg-red-500/20 text-red-300' },
-  };
-  return badges[status] || { label: status, color: 'bg-gray-500/20 text-gray-300' };
+  const key = String(status ?? '').toLowerCase();
+  const [label, tone] = STATUS_TONES[key] || [
+    // "under_review" -> "Under review"
+    key ? key.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()) : 'Unknown',
+    'neutral',
+  ];
+  return { label, tone, color: TONE_CLASS[tone] ?? '' };
 };
 
 export const validateEmail = (email) => {

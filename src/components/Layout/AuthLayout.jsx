@@ -1,93 +1,145 @@
+import { motion } from '../Common/Motion';
+import { DepthField } from '../Common/Motion';
+
+/**
+ * Sign-in shell.
+ *
+ * Two halves of the same material: a recessed marketing panel on the left,
+ * the form raised out of the canvas on the right. The whole thing is one
+ * perspective scene so the card can lift toward the viewer on mount.
+ */
 export default function AuthLayout({ children }) {
   const highlights = [
-    ['Live Ops', 'Attendance, fees, admissions, and messages in one daily command view.'],
-    ['AI Assist', 'Draft parent updates, fee follow-ups, and student progress summaries.'],
-    ['Tenant Safe', 'Every school runs inside its own institution workspace.'],
+    ['Live Ops', 'Admissions, attendance, fees and messages in one daily command view.'],
+    ['Growth', 'Lead CRM, referrals, commissions and scholarships, end to end.'],
+    ['Tenant Safe', 'Every institution runs inside its own isolated workspace.'],
   ];
 
+  const stats = [
+    ['15+', 'ERP modules'],
+    ['AI', 'Automation layer'],
+    ['MT', 'Multi-tenant ready'],
+  ];
+
+  const Logo = ({ size = 'w-11 h-11', icon = 'w-6 h-6' }) => (
+    <div
+      className={`${size} rounded-2xl flex items-center justify-center shrink-0`}
+      style={{
+        background: 'linear-gradient(145deg, var(--neu-teal), var(--neu-primary))',
+        boxShadow: 'var(--neu-e2)',
+      }}
+    >
+      <svg viewBox="0 0 24 24" fill="none" className={`${icon} text-white`}>
+        <path d="M12 3L2 8l10 5 10-5-10-5z" fill="currentColor" opacity="0.92" />
+        <path d="M2 16l10 5 10-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <path d="M2 12l10 5 10-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    </div>
+  );
+
   return (
-    <div className="min-h-screen grid md:grid-cols-[1.08fr_0.92fr] bg-[#F7F8FB]">
-      <section className="hidden md:flex flex-col justify-between p-8 lg:p-10 bg-[#111827] text-white relative overflow-hidden">
-        <div className="absolute inset-0 opacity-60 pointer-events-none"
-          style={{
-            background:
-              'linear-gradient(135deg, rgba(14,124,123,0.22), transparent 34%), linear-gradient(315deg, rgba(224,100,74,0.2), transparent 28%)',
-          }}
-        />
-        <div className="relative flex items-center gap-3">
-          <div
-            className="w-11 h-11 rounded-lg flex items-center justify-center shadow-xl"
-            style={{ background: 'linear-gradient(135deg, #0E7C7B, #E0644A)' }}
-          >
-            <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6 text-white">
-              <path d="M12 3L2 8l10 5 10-5-10-5z" fill="currentColor" opacity="0.9" />
-              <path d="M2 16l10 5 10-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              <path d="M2 12l10 5 10-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </div>
+    <div
+      className="auth-shell scene min-h-screen grid md:grid-cols-[1.08fr_0.92fr] relative"
+      style={{ background: 'var(--neu-bg)' }}
+    >
+      <DepthField />
+
+      {/* Marketing panel — carved into the canvas */}
+      <section className="from-md flex flex-col justify-between p-8 lg:p-10 relative z-10">
+        <div className="flex items-center gap-3">
+          <Logo />
           <div>
-            <h1 className="text-2xl text-white font-display mb-0">CyberMilo</h1>
-            <p className="text-white/50 text-sm mb-0">Education operations workspace</p>
+            <h1 className="text-2xl font-display mb-0" style={{ color: 'var(--neu-ink)' }}>
+              CyberMilo
+            </h1>
+            <p className="text-sm mb-0" style={{ color: 'var(--neu-ink-muted)' }}>
+              Education operations workspace
+            </p>
           </div>
         </div>
 
-        <div className="relative max-w-xl">
-          <p className="text-[#F4B860] text-sm font-bold uppercase tracking-[0.18em] mb-4">
+        <div className="max-w-xl layer-3d">
+          <p
+            className="text-sm font-bold uppercase tracking-[0.18em] mb-4"
+            style={{ color: 'var(--neu-coral)' }}
+          >
             SaaS Campus Intelligence
           </p>
-          <h2 className="text-white text-4xl xl:text-5xl font-display leading-tight mb-5">
-            Run every school account from one calm, intelligent operations desk.
+          <h2
+            className="text-4xl xl:text-5xl font-display leading-tight mb-5"
+            style={{ color: 'var(--neu-ink)' }}
+          >
+            Run every institution from one calm, intelligent operations desk.
           </h2>
-          <p className="text-white/60 text-lg max-w-lg">
-            CyberMilo is built for multi-tenant school management: admissions, fees, attendance, communication, AI insights, and account control.
+          <p className="text-lg max-w-lg" style={{ color: 'var(--neu-ink-soft)' }}>
+            Admissions, academics, scholarships, referrals, communication and AI
+            insights — for universities, colleges, schools and training centres.
           </p>
 
           <div className="mt-8 grid gap-3">
-            {highlights.map(([title, copy]) => (
-              <div key={title} className="rounded-lg border border-white/10 bg-white/6 p-4">
-                <p className="text-white font-bold mb-1">{title}</p>
-                <p className="text-white/55 text-sm mb-0">{copy}</p>
-              </div>
+            {highlights.map(([title, copy], index) => (
+              <motion.div
+                key={title}
+                initial={{ opacity: 0, x: -16 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.15 + index * 0.08, type: 'spring', stiffness: 220, damping: 28 }}
+                className="p-4 neu-inset"
+                style={{ borderRadius: 'var(--neu-radius)' }}
+              >
+                <p className="font-bold mb-1" style={{ color: 'var(--neu-ink)' }}>{title}</p>
+                <p className="text-sm mb-0" style={{ color: 'var(--neu-ink-muted)' }}>{copy}</p>
+              </motion.div>
             ))}
           </div>
         </div>
 
-        <div className="relative grid grid-cols-3 gap-4 max-w-xl">
-          {[
-            ['8+', 'ERP modules'],
-            ['AI', 'Automation layer'],
-            ['MT', 'Multi-tenant ready'],
-          ].map(([value, label]) => (
-            <div key={label} className="rounded-lg border border-white/10 bg-white/5 p-4">
-              <p className="text-2xl font-extrabold text-white mb-1">{value}</p>
-              <p className="text-xs text-white/50 mb-0">{label}</p>
+        <div className="grid grid-cols-3 gap-4 max-w-xl">
+          {stats.map(([value, label]) => (
+            <div
+              key={label}
+              className="p-4"
+              style={{ borderRadius: 'var(--neu-radius)', boxShadow: 'var(--neu-e1)' }}
+            >
+              <p className="text-2xl font-extrabold mb-1" style={{ color: 'var(--neu-primary)' }}>
+                {value}
+              </p>
+              <p className="text-xs mb-0" style={{ color: 'var(--neu-ink-muted)' }}>{label}</p>
             </div>
           ))}
         </div>
       </section>
 
-      <section className="flex items-center justify-center p-5 sm:p-8">
+      {/* Form — raised out of the canvas */}
+      <section className="flex items-center justify-center p-5 sm:p-8 relative z-10">
         <div className="w-full max-w-md">
-          <div className="lg:hidden text-center mb-8">
-            <div
-              className="w-12 h-12 rounded-lg flex items-center justify-center mx-auto mb-3"
-              style={{ background: 'linear-gradient(135deg, #0E7C7B, #E0644A)' }}
-            >
-              <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6 text-white">
-                <path d="M12 3L2 8l10 5 10-5-10-5z" fill="currentColor" opacity="0.9" />
-                <path d="M2 16l10 5 10-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                <path d="M2 12l10 5 10-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
+          <div className="upto-md text-center mb-8">
+            <div className="flex justify-center mb-3">
+              <Logo size="w-12 h-12" />
             </div>
-            <h1 className="text-3xl font-display text-slate-950 mb-1">CyberMilo</h1>
-            <p className="text-slate-500 text-sm">Education operations workspace</p>
+            <h1 className="text-3xl font-display mb-1" style={{ color: 'var(--neu-ink)' }}>
+              CyberMilo
+            </h1>
+            <p className="text-sm mb-0" style={{ color: 'var(--neu-ink-muted)' }}>
+              Education operations workspace
+            </p>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-lg px-8 py-8 shadow-2xl">
+          <motion.div
+            className="px-6 sm:px-8 py-8 layer-3d"
+            initial={{ opacity: 0, y: 24, rotateX: -8 }}
+            animate={{ opacity: 1, y: 0, rotateX: 0 }}
+            transition={{ type: 'spring', stiffness: 240, damping: 28 }}
+            style={{
+              background: 'var(--neu-bg)',
+              borderRadius: 'var(--neu-radius-xl)',
+              boxShadow: 'var(--neu-e4)',
+              transformStyle: 'preserve-3d',
+            }}
+          >
             {children}
-          </div>
+          </motion.div>
 
-          <p className="text-center mt-6 text-slate-400 text-xs">
+          <p className="text-center mt-6 text-xs mb-0" style={{ color: 'var(--neu-ink-muted)' }}>
             Copyright 2026 CyberMilo. All rights reserved.
           </p>
         </div>

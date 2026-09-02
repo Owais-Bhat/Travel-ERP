@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import MainLayout from '../../components/Layout/MainLayout';
 import GlassCard from '../../components/Common/GlassCard';
 import Button from '../../components/Common/Button';
@@ -386,13 +387,17 @@ export default function CareerPathPage() {
           </div>
         )}
 
-        {/* Loading overlay */}
-        {loading && (
+        {/* Loading overlay — portalled to <body>: MainLayout's ancestors set
+            `perspective` and `will-change: transform` for the 3D shell,
+            which gives fixed-position descendants a new containing block
+            instead of the viewport, landing an in-place overlay off-screen. */}
+        {loading && createPortal(
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex flex-col items-center justify-center z-50">
             <div className="w-16 h-16 border-4 border-neon-cyan/30 border-t-neon-cyan rounded-full animate-spin mb-4" />
             <p className="text-white text-lg font-medium">Analyzing career profile...</p>
             <p className="text-white/50 text-sm mt-1">This may take a few seconds</p>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     </MainLayout>

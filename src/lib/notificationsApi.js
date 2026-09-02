@@ -1,92 +1,79 @@
-import supabase from './supabase';
+import api from './api';
 
+/**
+ * In-app notifications.
+ *
+ * Ported off Supabase Realtime. Postgres LISTEN/NOTIFY has no MySQL
+ * equivalent, so `pollNotifications` replaces the realtime channel: it asks
+ * only for rows newer than the last cursor, which is one indexed lookup per
+ * poll rather than a full refetch.
+ */
 const PAGE_SIZE = 20;
 
-export async function fetchNotifications(profileId, limit = PAGE_SIZE) {
-  const { data, error } = await supabase
-    .from('notifications')
-    .select('*')
-    .eq('user_id', profileId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  return { data: data || [], error };
+export async function fetchNotifications(limit = PAGE_SIZE) {
+  const response = await api.get('/notifications', { params: { limit } });
+  return response.data;
 }
 
 export async function markNotificationRead(id) {
-  const { error } = await supabase
-    .from('notifications')
-    .update({ read_at: new Date().toISOString() })
-    .eq('id', id);
-  return { error };
+  const response = await api.post(`/notifications/${id}/read`);
+  return response.data;
 }
 
-export async function markAllNotificationsRead(profileId) {
-  const { error } = await supabase
-    .from('notifications')
-    .update({ read_at: new Date().toISOString() })
-    .eq('user_id', profileId)
-    .is('read_at', null);
-  return { error };
+export async function markAllNotificationsRead() {
+  const response = await api.post('/notifications/read-all');
+  return response.data;
 }
 
-export async function createNotification({ institutionId, userId, title, body, type = 'info', link, createdBy }) {
-  const { error } = await supabase.from('notifications').insert([{
-    institution_id: institutionId,
-    user_id: userId,
-    title,
-    body,
-    type,
-    link,
-    created_by: createdBy,
-  }]);
-  return { error };
+export async function deleteNotification(id) {
+  const response = await api.delete(`/notifications/${id}`);
+  return response.data;
+}
+
+/** Fan a notification out to a role, or to specific profile ids. */
+export async function notifyInstitution({ title, body, type = 'info', link, role = 'all', profileIds }) {
+  const response = await api.post('/notifications/broadcast', { title, body, type, link, role, profileIds });
+  return response.data;
 }
 
 /**
- * Fan a notification out to every active user of an institution
- * (excluding the creator). Fire-and-forget from UI code.
+ * Poll for anything newer than `since`.
+ *
+ * Starts an interval and returns a stop function, so callers keep the same
+ * subscribe/unsubscribe shape the realtime channel had.
  */
-export async function notifyInstitution({ institutionId, title, body, type = 'info', link, createdBy }) {
-  const { data: profiles, error: profileError } = await supabase
-    .from('user_profiles')
-    .select('id')
-    .eq('institution_id', institutionId)
-    .eq('is_active', true);
-  if (profileError) return { error: profileError };
+export function pollNotifications(onBatch, { intervalMs = 30000, since = null } = {}) {
+  let cursor = since;
+  let stopped = false;
+  let timer = null;
 
-  const rows = (profiles || [])
-    .filter(p => p.id !== createdBy)
-    .map(p => ({
-      institution_id: institutionId,
-      user_id: p.id,
-      title,
-      body,
-      type,
-      link,
-      created_by: createdBy,
-    }));
-  if (rows.length === 0) return { error: null };
+  const tick = async () => {
+    if (stopped) return;
+    try {
+      const response = await api.get('/notifications', {
+        params: { limit: PAGE_SIZE, ...(cursor ? { since: cursor } : {}) },
+      });
+      const { notifications = [], unread = 0 } = response.data || {};
+      if (notifications.length > 0) {
+        cursor = notifications[0].created_at;
+        onBatch(notifications, unread);
+      }
+    } catch {
+      // Offline or the session expired — the next tick will retry.
+    }
+  };
 
-  const { error } = await supabase.from('notifications').insert(rows);
-  return { error };
-}
+  // Pause while the tab is hidden; no point polling a screen nobody sees.
+  const onVisibility = () => {
+    if (document.visibilityState === 'visible') tick();
+  };
 
-/**
- * Subscribe to new notifications for a profile. Returns the channel;
- * caller must supabase.removeChannel(channel) on cleanup.
- */
-export function subscribeToNotifications(profileId, onInsert) {
-  return supabase
-    .channel(`notifications-${profileId}`)
-    .on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${profileId}`,
-      },
-      (payload) => onInsert(payload.new)
-    )
-    .subscribe();
+  timer = setInterval(tick, intervalMs);
+  document.addEventListener('visibilitychange', onVisibility);
+
+  return () => {
+    stopped = true;
+    clearInterval(timer);
+    document.removeEventListener('visibilitychange', onVisibility);
+  };
 }

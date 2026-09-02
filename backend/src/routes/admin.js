@@ -1,607 +1,604 @@
+/**
+ * Platform (super-admin) console.
+ *
+ * Ported from Supabase to MySQL. Also hosts the EIMS institution
+ * verification workflow: institutions submit documents, the platform reviews
+ * and either verifies or rejects them.
+ */
 import express from 'express';
-import { adminClient } from '../supabase.js';
+import bcrypt from 'bcrypt';
+import { v4 as uuidv4 } from 'uuid';
+import db from '../lib/db.js';
 import { requireSuperAdmin } from '../middleware/auth.js';
 import { recordAuditEvent } from '../lib/audit.js';
+import { asyncHandler, ApiError } from '../lib/errors.js';
+import { validate } from '../lib/validate.js';
+import { z, requiredEmail, optionalText, phone } from '../validation/common.js';
 import { FEATURE_CATALOG, getBillingState, getPlanFeatureMap, getPlanLimits } from '../saas/features.js';
 
 const router = express.Router();
 
 router.use(requireSuperAdmin);
 
-function requireFields(body, fields) {
-  const missing = fields.filter(field => !String(body[field] ?? '').trim());
-  if (missing.length) {
-    const error = new Error(`Missing required fields: ${missing.join(', ')}`);
-    error.status = 400;
-    throw error;
+const PLANS = ['free', 'starter', 'growth', 'pro', 'enterprise'];
+const SUBSCRIPTION_STATUSES = ['trialing', 'active', 'past_due', 'suspended', 'cancelled'];
+const VERIFICATION_STATUSES = ['pending', 'under_review', 'verified', 'rejected'];
+const FEATURE_KEYS = FEATURE_CATALOG.map((feature) => feature.key);
+
+/** mysql2 returns JSON columns already parsed, but tolerate a string too. */
+function readSettings(value) {
+  if (!value) return {};
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
   }
 }
 
-function cleanText(value) {
-  return typeof value === 'string' ? value.trim() : value;
-}
+function decorateInstitution(institution, { userCount = 0, studentCount = 0 } = {}) {
+  const settings = readSettings(institution.settings);
+  const plan = institution.subscription_plan || 'free';
+  const limits = getPlanLimits(plan);
 
-function normalizeEmail(email) {
-  return cleanText(email)?.toLowerCase();
-}
-
-async function getInstitutionsWithUserCounts() {
-  const [institutionsRes, profilesRes, studentsRes] = await Promise.all([
-    adminClient.from('institutions').select('*').order('created_at', { ascending: false }),
-    adminClient.from('user_profiles').select('id, institution_id, role, is_active'),
-    adminClient.from('students').select('id, institution_id, status'),
-  ]);
-
-  if (institutionsRes.error) throw institutionsRes.error;
-  if (profilesRes.error) throw profilesRes.error;
-  if (studentsRes.error) throw studentsRes.error;
-
-  const userCounts = (profilesRes.data || []).reduce((acc, profile) => {
-    if (!profile.institution_id) return acc;
-    acc[profile.institution_id] = (acc[profile.institution_id] || 0) + 1;
-    return acc;
-  }, {});
-
-  const studentCounts = (studentsRes.data || []).reduce((acc, student) => {
-    if (!student.institution_id) return acc;
-    acc[student.institution_id] = (acc[student.institution_id] || 0) + 1;
-    return acc;
-  }, {});
-
-  return (institutionsRes.data || []).map(institution => ({
+  return {
     ...institution,
-    user_count: userCounts[institution.id] || 0,
-    student_count: studentCounts[institution.id] || 0,
-    suspended: institution.settings?.suspended === true,
-    billing_state: getBillingState(institution),
-    plan_limits: getPlanLimits(institution.subscription_plan || 'free'),
+    settings,
+    user_count: userCount,
+    student_count: studentCount,
+    suspended: settings.suspended === true,
+    billing_state: getBillingState({ ...institution, settings }),
+    plan_limits: limits,
     over_limits: {
-      users: getPlanLimits(institution.subscription_plan || 'free').users !== null
-        && (userCounts[institution.id] || 0) > getPlanLimits(institution.subscription_plan || 'free').users,
-      students: getPlanLimits(institution.subscription_plan || 'free').students !== null
-        && (studentCounts[institution.id] || 0) > getPlanLimits(institution.subscription_plan || 'free').students,
+      users: limits.users !== null && userCount > limits.users,
+      students: limits.students !== null && studentCount > limits.students,
     },
-    enabled_modules: getPlanFeatureMap(
-      institution.subscription_plan || 'free',
-      institution.settings?.modules || {}
-    ),
-  }));
+    enabled_modules: getPlanFeatureMap(plan, settings.modules || {}),
+  };
 }
 
+async function loadInstitutionOrFail(institutionId, connection = db) {
+  const [rows] = await connection.execute('SELECT * FROM institutions WHERE id = ?', [institutionId]);
+  if (!rows[0]) throw ApiError.notFound('Institution not found');
+  return rows[0];
+}
+
+async function saveSettings(institutionId, settings) {
+  await db.execute('UPDATE institutions SET settings = ? WHERE id = ?', [
+    JSON.stringify(settings),
+    institutionId,
+  ]);
+}
+
+// ------------------------------------------------------------------
+// Catalog
+// ------------------------------------------------------------------
 router.get('/features', (req, res) => {
   res.json({ features: FEATURE_CATALOG });
 });
 
-router.get('/usage', async (req, res, next) => {
-  try {
-    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const { data, error } = await adminClient
-      .from('feature_usage_events')
-      .select('institution_id, feature_key, event_type, created_at')
-      .gte('created_at', since)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    const institutionUsage = {};
-    const featureUsage = {};
-
-    for (const event of data || []) {
-      const institutionId = event.institution_id;
-      institutionUsage[institutionId] ||= {
-        total_events: 0,
-        last_seen_at: event.created_at,
-        features: {},
-      };
-
-      institutionUsage[institutionId].total_events += 1;
-      if (new Date(event.created_at) > new Date(institutionUsage[institutionId].last_seen_at)) {
-        institutionUsage[institutionId].last_seen_at = event.created_at;
-      }
-
-      institutionUsage[institutionId].features[event.feature_key] ||= {
-        count: 0,
-        last_seen_at: event.created_at,
-      };
-      institutionUsage[institutionId].features[event.feature_key].count += 1;
-      if (new Date(event.created_at) > new Date(institutionUsage[institutionId].features[event.feature_key].last_seen_at)) {
-        institutionUsage[institutionId].features[event.feature_key].last_seen_at = event.created_at;
-      }
-
-      featureUsage[event.feature_key] ||= {
-        count: 0,
-        institution_ids: new Set(),
-        last_seen_at: event.created_at,
-      };
-      featureUsage[event.feature_key].count += 1;
-      featureUsage[event.feature_key].institution_ids.add(institutionId);
-      if (new Date(event.created_at) > new Date(featureUsage[event.feature_key].last_seen_at)) {
-        featureUsage[event.feature_key].last_seen_at = event.created_at;
-      }
-    }
-
-    res.json({
-      since,
-      institutions: institutionUsage,
-      features: Object.fromEntries(
-        Object.entries(featureUsage).map(([key, usage]) => [
-          key,
-          {
-            count: usage.count,
-            institution_count: usage.institution_ids.size,
-            last_seen_at: usage.last_seen_at,
-          },
-        ])
-      ),
-      unused_features: FEATURE_CATALOG
-        .filter(feature => !featureUsage[feature.key])
-        .map(feature => feature.key),
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.get('/audit', async (req, res, next) => {
-  try {
-    const limit = Math.min(Number(req.query.limit) || 50, 200);
-    const institutionId = cleanText(req.query.institutionId);
-
-    let query = adminClient
-      .from('activity_log')
-      .select('id, institution_id, user_id, action, description, entity_type, entity_id, severity, ip_address, user_agent, metadata, created_at, institutions(name)')
-      .order('created_at', { ascending: false })
-      .limit(limit);
-
-    if (institutionId) {
-      query = query.eq('institution_id', institutionId);
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-
-    res.json({ events: data || [] });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.get('/institutions', async (req, res, next) => {
-  try {
-    const institutions = await getInstitutionsWithUserCounts();
-    res.json({ institutions });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.post('/institutions', async (req, res, next) => {
-  try {
-    const {
-      name,
-      type = 'School',
-      address = '',
-      phone = '',
-      email,
-      subscription_plan = 'free',
-      billingEmail,
-      trialDays = 14,
-      modules,
-      adminEmail,
-      adminPassword,
-      adminFirstName,
-      adminLastName = '',
-    } = req.body || {};
-
-    requireFields(
-      {
-        name,
-        email,
-        adminEmail,
-        adminPassword,
-        adminFirstName,
-      },
-      ['name', 'email', 'adminEmail', 'adminPassword', 'adminFirstName']
+// ------------------------------------------------------------------
+// Tenants
+// ------------------------------------------------------------------
+router.get(
+  '/institutions',
+  asyncHandler(async (req, res) => {
+    const [institutions] = await db.query('SELECT * FROM institutions ORDER BY created_at DESC');
+    const [userCounts] = await db.query(
+      'SELECT institution_id, COUNT(*) AS total FROM user_profiles WHERE institution_id IS NOT NULL GROUP BY institution_id'
+    );
+    const [studentCounts] = await db.query(
+      'SELECT institution_id, COUNT(*) AS total FROM students GROUP BY institution_id'
     );
 
-    const allowedPlans = ['free', 'starter', 'growth', 'pro', 'enterprise'];
-    const plan = cleanText(subscription_plan) || 'free';
-    if (!allowedPlans.includes(plan)) {
-      return res.status(400).json({ error: `Invalid plan. Use one of: ${allowedPlans.join(', ')}` });
-    }
+    const users = new Map(userCounts.map((row) => [row.institution_id, Number(row.total)]));
+    const students = new Map(studentCounts.map((row) => [row.institution_id, Number(row.total)]));
 
-    const normalizedTrialDays = Math.max(0, Math.min(Number(trialDays) || 0, 365));
-    const requestedModules = modules && typeof modules === 'object' ? modules : {};
-    const moduleMap = getPlanFeatureMap(plan, requestedModules);
-
-    const { data: institution, error: institutionError } = await adminClient
-      .from('institutions')
-      .insert([{
-        name: cleanText(name),
-        type: cleanText(type),
-        address: cleanText(address),
-        phone: cleanText(phone),
-        email: normalizeEmail(email),
-        billing_email: normalizeEmail(billingEmail || email),
-        subscription_plan: plan,
-        subscription_status: normalizedTrialDays > 0 ? 'trialing' : 'active',
-        trial_ends_at: normalizedTrialDays > 0
-          ? new Date(Date.now() + normalizedTrialDays * 24 * 60 * 60 * 1000).toISOString()
-          : null,
-        settings: {
-          modules: moduleMap,
-          suspended: false,
-          onboarding: {
-            provisioned_at: new Date().toISOString(),
-            provisioned_by: req.auth?.profile?.id || null,
-            checklist_dismissed_at: null,
-          },
-        },
-      }])
-      .select()
-      .single();
-
-    if (institutionError) throw institutionError;
-
-    const { data: authData, error: createUserError } = await adminClient.auth.admin.createUser({
-      email: normalizeEmail(adminEmail),
-      password: adminPassword,
-      email_confirm: true,
-      user_metadata: {
-        first_name: cleanText(adminFirstName),
-        last_name: cleanText(adminLastName),
-        role: 'institution_admin',
-      },
+    res.json({
+      institutions: institutions.map((institution) =>
+        decorateInstitution(institution, {
+          userCount: users.get(institution.id) || 0,
+          studentCount: students.get(institution.id) || 0,
+        })
+      ),
     });
+  })
+);
 
-    if (createUserError) {
-      await adminClient.from('institutions').delete().eq('id', institution.id);
-      throw createUserError;
-    }
-
-    const { data: profile, error: profileError } = await adminClient
-      .from('user_profiles')
-      .insert([{
-        user_id: authData.user.id,
-        institution_id: institution.id,
-        role: 'institution_admin',
-        first_name: cleanText(adminFirstName),
-        last_name: cleanText(adminLastName),
-        is_active: true,
-      }])
-      .select()
-      .single();
-
-    if (profileError) throw profileError;
-
-    await recordAuditEvent(req, {
-      institutionId: institution.id,
-      action: 'institution.created',
-      description: `Created institution ${institution.name}`,
-      entityType: 'institution',
-      entityId: institution.id,
-      severity: 'success',
-      metadata: {
-        plan: institution.subscription_plan,
-        trial_days: normalizedTrialDays,
-        enabled_feature_count: Object.values(moduleMap).filter(Boolean).length,
-        admin_profile_id: profile.id,
-        admin_email: normalizeEmail(adminEmail),
-      },
-    });
-
-    res.status(201).json({ institution, adminUser: authData.user, profile });
-  } catch (err) {
-    next(err);
-  }
+const createInstitutionSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  type: z.string().trim().max(50).default('School'),
+  address: optionalText(1000),
+  phone,
+  email: requiredEmail,
+  city: optionalText(120),
+  state: optionalText(120),
+  country: optionalText(120),
+  website: optionalText(255),
+  subscription_plan: z.enum(PLANS).default('free'),
+  billingEmail: z.string().trim().email().max(255).optional(),
+  trialDays: z.coerce.number().int().min(0).max(365).default(14),
+  modules: z.record(z.string(), z.boolean()).optional(),
+  adminEmail: requiredEmail,
+  adminPassword: z.string().min(8, 'Admin password must be at least 8 characters').max(72),
+  adminFirstName: z.string().trim().min(1).max(100),
+  adminLastName: optionalText(100),
 });
 
-router.post('/subscription', async (req, res, next) => {
-  try {
-    const {
-      institutionId,
-      status,
-      billingEmail,
-      trialEndsAt,
-      currentPeriodEndsAt,
-    } = req.body || {};
+router.post(
+  '/institutions',
+  validate({ body: createInstitutionSchema }),
+  asyncHandler(async (req, res) => {
+    const body = req.body;
+    const plan = body.subscription_plan;
+    const adminEmail = body.adminEmail.toLowerCase();
 
-    requireFields({ institutionId, status }, ['institutionId', 'status']);
-
-    const allowedStatuses = ['trialing', 'active', 'past_due', 'suspended', 'cancelled'];
-    if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({ error: `Invalid status. Use one of: ${allowedStatuses.join(', ')}` });
+    const [existingUser] = await db.execute('SELECT id FROM users WHERE email = ?', [adminEmail]);
+    if (existingUser.length > 0) {
+      throw ApiError.conflict('A user with that admin email already exists.');
     }
 
-    const payload = {
-      subscription_status: status,
+    const institutionId = uuidv4();
+    const userId = uuidv4();
+    const profileId = uuidv4();
+    // `settings.modules` stores only the tenant's *deltas* from the plan
+    // default (sparse) — never the fully resolved map. Storing the dense
+    // map here used to mean every later plan change re-merged the old
+    // plan's booleans back in, silently reverting the upgrade (see the fix
+    // in /change-plan below for the full story).
+    const moduleOverrides = body.modules || {};
+    const moduleMap = getPlanFeatureMap(plan, moduleOverrides);
+    const trialEndsAt = body.trialDays > 0
+      ? new Date(Date.now() + body.trialDays * 24 * 60 * 60 * 1000)
+      : null;
+
+    const settings = {
+      modules: moduleOverrides,
+      suspended: false,
+      onboarding: {
+        provisioned_at: new Date().toISOString(),
+        provisioned_by: req.auth?.profile?.id || null,
+        checklist_dismissed_at: null,
+      },
     };
 
-    if (billingEmail !== undefined) payload.billing_email = normalizeEmail(billingEmail);
-    if (trialEndsAt !== undefined) payload.trial_ends_at = trialEndsAt || null;
-    if (currentPeriodEndsAt !== undefined) payload.current_period_ends_at = currentPeriodEndsAt || null;
+    const passwordHash = await bcrypt.hash(body.adminPassword, 12);
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
 
-    const { data, error } = await adminClient
-      .from('institutions')
-      .update(payload)
-      .eq('id', institutionId)
-      .select()
-      .single();
+      await connection.execute(
+        `INSERT INTO institutions
+           (id, name, type, address, phone, email, city, state, country, website,
+            billing_email, subscription_plan, subscription_status, trial_ends_at, settings)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          institutionId,
+          body.name,
+          body.type,
+          body.address || null,
+          body.phone || null,
+          body.email.toLowerCase(),
+          body.city || null,
+          body.state || null,
+          body.country || null,
+          body.website || null,
+          (body.billingEmail || body.email).toLowerCase(),
+          plan,
+          body.trialDays > 0 ? 'trialing' : 'active',
+          trialEndsAt,
+          JSON.stringify(settings),
+        ]
+      );
 
-    if (error) throw error;
+      await connection.execute(
+        `INSERT INTO users (id, email, password_hash, email_verified_at, password_changed_at)
+         VALUES (?, ?, ?, NOW(), NOW())`,
+        [userId, adminEmail, passwordHash]
+      );
+
+      await connection.execute(
+        `INSERT INTO user_profiles (id, user_id, institution_id, role, first_name, last_name, is_active)
+         VALUES (?, ?, ?, 'institution_admin', ?, ?, 1)`,
+        [profileId, userId, institutionId, body.adminFirstName, body.adminLastName || null]
+      );
+
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+
+    const institution = await loadInstitutionOrFail(institutionId);
+
+    await recordAuditEvent(req, {
+      institutionId,
+      action: 'institution.created',
+      description: `Created institution ${body.name}`,
+      entityType: 'institution',
+      entityId: institutionId,
+      severity: 'success',
+      metadata: {
+        plan,
+        trial_days: body.trialDays,
+        enabled_feature_count: Object.values(moduleMap).filter(Boolean).length,
+        admin_email: adminEmail,
+        admin_profile_id: profileId,
+      },
+    });
+
+    res.status(201).json({
+      institution: decorateInstitution(institution, { userCount: 1 }),
+      admin: { id: userId, email: adminEmail, profile_id: profileId },
+    });
+  })
+);
+
+// ------------------------------------------------------------------
+// Institution verification (EIMS)
+// ------------------------------------------------------------------
+router.get(
+  '/verifications',
+  validate({ query: z.object({ status: z.enum(VERIFICATION_STATUSES).optional() }).passthrough() }),
+  asyncHandler(async (req, res) => {
+    const status = req.query.status;
+    const [rows] = status
+      ? await db.execute(
+        `SELECT i.*, (SELECT COUNT(*) FROM institution_documents d WHERE d.institution_id = i.id) AS document_count
+             FROM institutions i WHERE i.verification_status = ? ORDER BY i.created_at DESC`,
+        [status]
+      )
+      : await db.query(
+        `SELECT i.*, (SELECT COUNT(*) FROM institution_documents d WHERE d.institution_id = i.id) AS document_count
+             FROM institutions i ORDER BY FIELD(i.verification_status, 'under_review', 'pending', 'rejected', 'verified'), i.created_at DESC`
+      );
+
+    res.json({ institutions: rows.map((row) => ({ ...row, settings: readSettings(row.settings) })) });
+  })
+);
+
+router.get(
+  '/verifications/:institutionId/documents',
+  validate({ params: z.object({ institutionId: z.string().uuid() }) }),
+  asyncHandler(async (req, res) => {
+    const [documents] = await db.execute(
+      'SELECT * FROM institution_documents WHERE institution_id = ? ORDER BY created_at DESC',
+      [req.params.institutionId]
+    );
+    res.json({ documents });
+  })
+);
+
+const verificationSchema = z.object({
+  status: z.enum(VERIFICATION_STATUSES),
+  notes: optionalText(2000),
+  publish: z.boolean().optional(),
+});
+
+router.post(
+  '/verifications/:institutionId',
+  validate({ params: z.object({ institutionId: z.string().uuid() }), body: verificationSchema }),
+  asyncHandler(async (req, res) => {
+    const { institutionId } = req.params;
+    const { status, notes, publish } = req.body;
+    const previous = await loadInstitutionOrFail(institutionId);
+
+    const verified = status === 'verified';
+    await db.execute(
+      `UPDATE institutions
+          SET verification_status = ?,
+              verification_notes  = ?,
+              verified_at         = ${verified ? 'NOW()' : 'NULL'},
+              verified_by         = ?,
+              is_published        = ?
+        WHERE id = ?`,
+      [
+        status,
+        notes || null,
+        verified ? req.auth.profile.id : null,
+        publish === undefined ? (verified ? 1 : 0) : Number(Boolean(publish)),
+        institutionId,
+      ]
+    );
+
+    await recordAuditEvent(req, {
+      institutionId,
+      action: `institution.${status}`,
+      description: `Verification status set to ${status}`,
+      entityType: 'institution',
+      entityId: institutionId,
+      severity: status === 'rejected' ? 'warning' : 'success',
+      metadata: { previous_status: previous.verification_status, next_status: status, notes: notes || null },
+    });
+
+    const institution = await loadInstitutionOrFail(institutionId);
+    res.json({ institution: decorateInstitution(institution) });
+  })
+);
+
+const reviewDocumentSchema = z.object({
+  status: z.enum(['pending', 'verified', 'rejected']),
+  notes: optionalText(1000),
+});
+
+router.post(
+  '/documents/:documentId/review',
+  validate({ params: z.object({ documentId: z.string().uuid() }), body: reviewDocumentSchema }),
+  asyncHandler(async (req, res) => {
+    const [rows] = await db.execute('SELECT * FROM institution_documents WHERE id = ?', [req.params.documentId]);
+    const document = rows[0];
+    if (!document) throw ApiError.notFound('Document not found');
+
+    await db.execute(
+      `UPDATE institution_documents
+          SET status = ?, notes = ?, reviewed_by = ?, reviewed_at = NOW()
+        WHERE id = ?`,
+      [req.body.status, req.body.notes || null, req.auth.profile.id, req.params.documentId]
+    );
+
+    await recordAuditEvent(req, {
+      institutionId: document.institution_id,
+      action: 'institution_document.reviewed',
+      description: `Marked "${document.name}" as ${req.body.status}`,
+      entityType: 'institution_document',
+      entityId: document.id,
+      severity: req.body.status === 'rejected' ? 'warning' : 'info',
+    });
+
+    const [updated] = await db.execute('SELECT * FROM institution_documents WHERE id = ?', [req.params.documentId]);
+    res.json({ document: updated[0] });
+  })
+);
+
+// ------------------------------------------------------------------
+// Billing + plans
+// ------------------------------------------------------------------
+const subscriptionSchema = z.object({
+  institutionId: z.string().uuid(),
+  status: z.enum(SUBSCRIPTION_STATUSES),
+  billingEmail: z.string().trim().email().max(255).optional(),
+  trialEndsAt: z.string().nullable().optional(),
+  currentPeriodEndsAt: z.string().nullable().optional(),
+});
+
+router.post(
+  '/subscription',
+  validate({ body: subscriptionSchema }),
+  asyncHandler(async (req, res) => {
+    const { institutionId, status, billingEmail, trialEndsAt, currentPeriodEndsAt } = req.body;
+    await loadInstitutionOrFail(institutionId);
+
+    const assignments = ['subscription_status = ?'];
+    const params = [status];
+    if (billingEmail !== undefined) {
+      assignments.push('billing_email = ?');
+      params.push(billingEmail.toLowerCase());
+    }
+    if (trialEndsAt !== undefined) {
+      assignments.push('trial_ends_at = ?');
+      params.push(trialEndsAt || null);
+    }
+    if (currentPeriodEndsAt !== undefined) {
+      assignments.push('current_period_ends_at = ?');
+      params.push(currentPeriodEndsAt || null);
+    }
+
+    await db.execute(
+      `UPDATE institutions SET ${assignments.join(', ')} WHERE id = ?`,
+      [...params, institutionId]
+    );
+
+    const institution = await loadInstitutionOrFail(institutionId);
 
     await recordAuditEvent(req, {
       institutionId,
       action: 'subscription.updated',
       description: `Updated subscription status to ${status}`,
       entityType: 'institution',
-      entityId: data.id,
+      entityId: institutionId,
       severity: ['past_due', 'suspended', 'cancelled'].includes(status) ? 'warning' : 'info',
-      metadata: {
-        status,
-        billing_email: payload.billing_email,
-        trial_ends_at: payload.trial_ends_at,
-        current_period_ends_at: payload.current_period_ends_at,
-      },
+      metadata: { status },
     });
 
-    res.json({
-      institution: {
-        ...data,
-        billing_state: getBillingState(data),
-        plan_limits: getPlanLimits(data.subscription_plan || 'free'),
-      },
-    });
-  } catch (err) {
-    next(err);
-  }
-});
+    res.json({ institution: decorateInstitution(institution) });
+  })
+);
 
-router.post('/invite-user', async (req, res, next) => {
-  try {
-    const {
+router.post(
+  '/change-plan',
+  validate({ body: z.object({ institutionId: z.string().uuid(), plan: z.enum(PLANS) }) }),
+  asyncHandler(async (req, res) => {
+    const { institutionId, plan } = req.body;
+    const current = await loadInstitutionOrFail(institutionId);
+
+    // `settings.modules` holds only this tenant's deltas from whatever plan
+    // it's on — it is never touched by a plan change. The bug this replaced:
+    // writing `getPlanFeatureMap(plan, settings.modules)` baked the *fully
+    // resolved* map (every key, true or false) into settings.modules. The
+    // next plan change would then re-merge that dense old snapshot as the
+    // "overrides" on top of the new plan — silently reverting an upgrade
+    // back to the previous plan's feature set, because the old plan's
+    // `false`s were now indistinguishable from a deliberate admin override.
+    await db.execute('UPDATE institutions SET subscription_plan = ? WHERE id = ?', [
+      plan,
       institutionId,
-      email,
-      role = 'teacher',
-      firstName,
-      lastName = '',
-      redirectTo,
-    } = req.body || {};
+    ]);
 
-    requireFields({ institutionId, email, firstName }, ['institutionId', 'email', 'firstName']);
-
-    const { data: institution, error: institutionError } = await adminClient
-      .from('institutions')
-      .select('id, name')
-      .eq('id', institutionId)
-      .single();
-
-    if (institutionError || !institution) {
-      return res.status(404).json({ error: 'Institution not found' });
-    }
-
-    const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
-      normalizeEmail(email),
-      {
-        redirectTo,
-        data: {
-          first_name: cleanText(firstName),
-          last_name: cleanText(lastName),
-          role: cleanText(role),
-          institution_id: institutionId,
-        },
-      }
-    );
-
-    if (inviteError) throw inviteError;
-
-    const { data: profile, error: profileError } = await adminClient
-      .from('user_profiles')
-      .upsert(
-        [{
-          user_id: inviteData.user.id,
-          institution_id: institutionId,
-          role: cleanText(role),
-          first_name: cleanText(firstName),
-          last_name: cleanText(lastName),
-          is_active: true,
-        }],
-        { onConflict: 'user_id' }
-      )
-      .select()
-      .single();
-
-    if (profileError) throw profileError;
-
-    await recordAuditEvent(req, {
-      institutionId,
-      action: 'user.invited',
-      description: `Invited ${normalizeEmail(email)} as ${cleanText(role)}`,
-      entityType: 'user_profile',
-      entityId: profile.id,
-      severity: 'info',
-      metadata: {
-        invited_email: normalizeEmail(email),
-        invited_role: cleanText(role),
-      },
-    });
-
-    res.status(201).json({ user: inviteData.user, profile });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.post('/change-plan', async (req, res, next) => {
-  try {
-    const { institutionId, plan } = req.body || {};
-    requireFields({ institutionId, plan }, ['institutionId', 'plan']);
-
-    const allowedPlans = ['free', 'starter', 'growth', 'pro', 'enterprise'];
-    if (!allowedPlans.includes(plan)) {
-      return res.status(400).json({ error: `Invalid plan. Use one of: ${allowedPlans.join(', ')}` });
-    }
-
-    const { data: currentInstitution, error: currentError } = await adminClient
-      .from('institutions')
-      .select('id, subscription_plan, settings')
-      .eq('id', institutionId)
-      .single();
-
-    if (currentError || !currentInstitution) {
-      return res.status(404).json({ error: 'Institution not found' });
-    }
-
-    const nextSettings = {
-      ...(currentInstitution.settings || {}),
-      modules: getPlanFeatureMap(plan, currentInstitution.settings?.modules || {}),
-    };
-
-    const { data, error } = await adminClient
-      .from('institutions')
-      .update({ subscription_plan: plan, settings: nextSettings })
-      .eq('id', institutionId)
-      .select()
-      .single();
-
-    if (error) throw error;
     await recordAuditEvent(req, {
       institutionId,
       action: 'plan.changed',
       description: `Changed plan to ${plan}`,
       entityType: 'institution',
-      entityId: data.id,
-      severity: 'info',
-      metadata: {
-        previous_plan: currentInstitution.subscription_plan,
-        next_plan: plan,
-      },
+      entityId: institutionId,
+      metadata: { previous_plan: current.subscription_plan, next_plan: plan },
     });
-    res.json({ institution: data });
-  } catch (err) {
-    next(err);
-  }
-});
 
-router.post('/set-feature', async (req, res, next) => {
-  try {
-    const { institutionId, featureKey, enabled } = req.body || {};
-    requireFields({ institutionId, featureKey }, ['institutionId', 'featureKey']);
+    const institution = await loadInstitutionOrFail(institutionId);
+    res.json({ institution: decorateInstitution(institution) });
+  })
+);
 
-    const knownFeature = FEATURE_CATALOG.some(feature => feature.key === featureKey);
-    if (!knownFeature) {
-      return res.status(400).json({ error: 'Unknown feature key' });
-    }
+router.post(
+  '/set-feature',
+  validate({
+    body: z.object({
+      institutionId: z.string().uuid(),
+      featureKey: z.string().min(1).max(60),
+      enabled: z.boolean(),
+    }),
+  }),
+  asyncHandler(async (req, res) => {
+    const { institutionId, featureKey, enabled } = req.body;
+    if (!FEATURE_KEYS.includes(featureKey)) throw ApiError.badRequest('Unknown feature key');
 
-    const { data: institution, error: fetchError } = await adminClient
-      .from('institutions')
-      .select('id, subscription_plan, settings')
-      .eq('id', institutionId)
-      .single();
-
-    if (fetchError || !institution) {
-      return res.status(404).json({ error: 'Institution not found' });
-    }
-
+    const current = await loadInstitutionOrFail(institutionId);
+    const settings = readSettings(current.settings);
+    // Merge just the one toggled key into the existing sparse overrides —
+    // not the fully resolved plan map (same bug class as /change-plan
+    // above: writing every key would freeze the current plan's booleans
+    // in place and undo the next plan change).
     const nextSettings = {
-      ...(institution.settings || {}),
-      modules: {
-        ...getPlanFeatureMap(institution.subscription_plan || 'free', institution.settings?.modules || {}),
-        [featureKey]: Boolean(enabled),
-      },
+      ...settings,
+      modules: { ...(settings.modules || {}), [featureKey]: enabled },
     };
 
-    const { data: updatedInstitution, error: updateError } = await adminClient
-      .from('institutions')
-      .update({ settings: nextSettings })
-      .eq('id', institutionId)
-      .select()
-      .single();
-
-    if (updateError) throw updateError;
+    await saveSettings(institutionId, nextSettings);
 
     await recordAuditEvent(req, {
       institutionId,
       action: 'feature.updated',
-      description: `${Boolean(enabled) ? 'Enabled' : 'Disabled'} feature ${featureKey}`,
+      description: `${enabled ? 'Enabled' : 'Disabled'} feature ${featureKey}`,
       entityType: 'feature',
-      entityId: updatedInstitution.id,
-      severity: 'info',
-      metadata: {
-        feature_key: featureKey,
-        enabled: Boolean(enabled),
-      },
+      entityId: institutionId,
+      metadata: { feature_key: featureKey, enabled },
     });
 
-    res.json({
-      institution: {
-        ...updatedInstitution,
-        enabled_modules: getPlanFeatureMap(
-          updatedInstitution.subscription_plan || 'free',
-          updatedInstitution.settings?.modules || {}
-        ),
-      },
-    });
-  } catch (err) {
-    next(err);
-  }
-});
+    const institution = await loadInstitutionOrFail(institutionId);
+    res.json({ institution: decorateInstitution(institution) });
+  })
+);
 
-router.post('/suspend-institution', async (req, res, next) => {
-  try {
-    const { institutionId, suspended = true, reason = '' } = req.body || {};
-    requireFields({ institutionId }, ['institutionId']);
-
-    const { data: institution, error: fetchError } = await adminClient
-      .from('institutions')
-      .select('id, settings')
-      .eq('id', institutionId)
-      .single();
-
-    if (fetchError || !institution) {
-      return res.status(404).json({ error: 'Institution not found' });
-    }
+router.post(
+  '/suspend-institution',
+  validate({
+    body: z.object({
+      institutionId: z.string().uuid(),
+      suspended: z.boolean().default(true),
+      reason: optionalText(500),
+    }),
+  }),
+  asyncHandler(async (req, res) => {
+    const { institutionId, suspended, reason } = req.body;
+    const current = await loadInstitutionOrFail(institutionId);
+    const settings = readSettings(current.settings);
 
     const nextSettings = {
-      ...(institution.settings || {}),
-      suspended: Boolean(suspended),
-      suspension_reason: cleanText(reason),
+      ...settings,
+      suspended,
+      suspension_reason: reason || null,
       suspended_at: suspended ? new Date().toISOString() : null,
     };
 
-    const { data: updatedInstitution, error: updateError } = await adminClient
-      .from('institutions')
-      .update({ settings: nextSettings })
-      .eq('id', institutionId)
-      .select()
-      .single();
-
-    if (updateError) throw updateError;
-
-    const { error: usersError } = await adminClient
-      .from('user_profiles')
-      .update({ is_active: !suspended })
-      .eq('institution_id', institutionId);
-
-    if (usersError) throw usersError;
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+      await connection.execute('UPDATE institutions SET settings = ? WHERE id = ?', [
+        JSON.stringify(nextSettings),
+        institutionId,
+      ]);
+      // Suspending locks every tenant user out; reactivating re-enables them.
+      await connection.execute(
+        'UPDATE user_profiles SET is_active = ? WHERE institution_id = ?',
+        [suspended ? 0 : 1, institutionId]
+      );
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
 
     await recordAuditEvent(req, {
       institutionId,
       action: suspended ? 'institution.suspended' : 'institution.reactivated',
       description: suspended ? 'Suspended institution access' : 'Reactivated institution access',
       entityType: 'institution',
-      entityId: updatedInstitution.id,
+      entityId: institutionId,
       severity: suspended ? 'warning' : 'success',
-      metadata: {
-        suspended: Boolean(suspended),
-        reason: cleanText(reason),
-      },
+      metadata: { suspended, reason: reason || null },
     });
 
-    res.json({ institution: updatedInstitution });
-  } catch (err) {
-    next(err);
-  }
-});
+    const institution = await loadInstitutionOrFail(institutionId);
+    res.json({ institution: decorateInstitution(institution) });
+  })
+);
+
+// ------------------------------------------------------------------
+// Telemetry
+// ------------------------------------------------------------------
+router.get(
+  '/usage',
+  asyncHandler(async (req, res) => {
+    const [byInstitution] = await db.query(
+      `SELECT institution_id, feature_key, COUNT(*) AS events, MAX(created_at) AS last_seen_at
+         FROM feature_usage_events
+        WHERE created_at >= (NOW() - INTERVAL 30 DAY)
+        GROUP BY institution_id, feature_key`
+    );
+
+    const institutions = {};
+    const features = {};
+
+    for (const row of byInstitution) {
+      const events = Number(row.events);
+      const bucket = (institutions[row.institution_id] ||= { total_events: 0, last_seen_at: null, features: {} });
+      bucket.total_events += events;
+      if (!bucket.last_seen_at || row.last_seen_at > bucket.last_seen_at) bucket.last_seen_at = row.last_seen_at;
+      bucket.features[row.feature_key] = { count: events, last_seen_at: row.last_seen_at };
+
+      const feature = (features[row.feature_key] ||= { count: 0, institution_count: 0, last_seen_at: null });
+      feature.count += events;
+      feature.institution_count += 1;
+      if (!feature.last_seen_at || row.last_seen_at > feature.last_seen_at) feature.last_seen_at = row.last_seen_at;
+    }
+
+    res.json({
+      windowDays: 30,
+      institutions,
+      features,
+      unused_features: FEATURE_KEYS.filter((key) => !features[key]),
+    });
+  })
+);
+
+router.get(
+  '/audit',
+  validate({
+    query: z.object({
+      limit: z.coerce.number().int().min(1).max(200).default(50),
+      institutionId: z.string().uuid().optional(),
+    }).passthrough(),
+  }),
+  asyncHandler(async (req, res) => {
+    const { limit, institutionId } = req.query;
+    const where = institutionId ? 'WHERE a.institution_id = ?' : '';
+    const params = institutionId ? [institutionId] : [];
+
+    const [events] = await db.query(
+      `SELECT a.*, i.name AS institution_name
+         FROM activity_log a
+         LEFT JOIN institutions i ON i.id = a.institution_id
+         ${where}
+        ORDER BY a.created_at DESC
+        LIMIT ${Number(limit)}`,
+      params
+    );
+
+    res.json({ events });
+  })
+);
 
 export default router;

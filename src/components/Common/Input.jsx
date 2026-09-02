@@ -1,6 +1,10 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { MdVisibility, MdVisibilityOff } from 'react-icons/md';
 
+/**
+ * Neumorphic text input — carved into the surface rather than raised,
+ * because you type *into* a field.
+ */
 export default function Input({
   label,
   error,
@@ -10,52 +14,81 @@ export default function Input({
   className = '',
   required = false,
   wrapperClass = '',
+  id,
   ...props
 }) {
+  const generatedId = useId();
+  const inputId = id || generatedId;
+  const describedBy = error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined;
+
   const [showPwd, setShowPwd] = useState(false);
   const isPassword = type === 'password';
   const resolvedType = isPassword ? (showPwd ? 'text' : 'password') : type;
 
   return (
-    <div className={`${wrapperClass}`}>
+    <div className={wrapperClass}>
       {label && (
-        <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+        <label htmlFor={inputId} className="neu-label">
           {label}
-          {required && <span className="text-red-400 ml-1">*</span>}
+          {required && <span style={{ color: 'var(--neu-danger)' }} className="ml-1">*</span>}
         </label>
       )}
+
       <div className="relative">
         {LeftIcon && (
-          <span className="absolute inset-y-0 left-0 flex w-11 items-center justify-center text-slate-400 pointer-events-none">
+          <span
+            className="absolute inset-y-0 left-0 flex w-11 items-center justify-center pointer-events-none"
+            style={{ color: 'var(--neu-ink-muted)' }}
+          >
             <LeftIcon className="w-5 h-5" />
           </span>
         )}
+
         <input
+          id={inputId}
           type={resolvedType}
-          className={`
-            input-glass w-full
-            ${error ? 'border-red-500/60 focus:border-red-400' : ''}
-            ${LeftIcon ? 'pl-11' : ''}
-            ${isPassword ? 'pr-10' : ''}
-            ${className}
-          `}
+          aria-invalid={error ? 'true' : undefined}
+          aria-describedby={describedBy}
+          className={[
+            'neu-input',
+            error ? 'neu-input-error' : '',
+            className,
+          ].filter(Boolean).join(' ')}
           {...props}
+          // `.neu-input` sets a padding shorthand and loads after Tailwind, so
+          // a `pl-11` utility would lose to it. Inline styles clear the icons
+          // reliably regardless of stylesheet order.
+          style={{
+            ...(LeftIcon ? { paddingLeft: '2.75rem' } : null),
+            ...(isPassword ? { paddingRight: '2.75rem' } : null),
+            ...props.style,
+          }}
         />
+
         {isPassword && (
           <button
             type="button"
-            onClick={() => setShowPwd(v => !v)}
-            className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-400 hover:text-slate-700 transition-colors"
+            onClick={() => setShowPwd((value) => !value)}
+            className="absolute inset-y-0 right-0 flex w-11 items-center justify-center transition-colors"
+            style={{ color: 'var(--neu-ink-muted)' }}
+            aria-label={showPwd ? 'Hide password' : 'Show password'}
             tabIndex={-1}
           >
-            {showPwd
-              ? <MdVisibilityOff className="w-4.5 h-4.5" />
-              : <MdVisibility className="w-4.5 h-4.5" />}
+            {showPwd ? <MdVisibilityOff className="w-5 h-5" /> : <MdVisibility className="w-5 h-5" />}
           </button>
         )}
       </div>
-      {error && <p className="text-red-400 text-xs mt-1.5">{error}</p>}
-      {hint && !error && <p className="text-slate-500 text-xs mt-1.5">{hint}</p>}
+
+      {error && (
+        <p id={`${inputId}-error`} className="text-xs mt-1.5" style={{ color: 'var(--neu-danger)' }}>
+          {error}
+        </p>
+      )}
+      {hint && !error && (
+        <p id={`${inputId}-hint`} className="text-xs mt-1.5" style={{ color: 'var(--neu-ink-muted)' }}>
+          {hint}
+        </p>
+      )}
     </div>
   );
 }
