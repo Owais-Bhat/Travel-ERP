@@ -12,13 +12,14 @@ import { refreshPlanOverrides } from './saas/planOverrides.js';
 verifyEnv();
 
 // Load plan-limit overrides before serving traffic so the first request
-// already reflects any admin-tuned pricing, not the shipped defaults.
-await refreshPlanOverrides().catch((error) => {
-  console.warn('Could not load plan_overrides (using shipped defaults):', error.message);
-});
-
+// already reflects any admin-tuned pricing, not the shipped defaults. Never
+// lets a slow/broken DB block startup — falls back to the shipped defaults.
 const server = app.listen(env.port, () => {
   console.log(`CyberMilo API listening on http://localhost:${env.port} (${env.nodeEnv})`);
+});
+
+refreshPlanOverrides().catch((error) => {
+  console.warn('Could not load plan_overrides (using shipped defaults):', error.message);
 });
 
 // Let in-flight requests finish before the process goes away.
