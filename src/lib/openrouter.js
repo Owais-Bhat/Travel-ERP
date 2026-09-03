@@ -131,7 +131,7 @@ Identify:
 Provide actionable insights in JSON format.`;
 
   const messages = [{ role: 'user', content: prompt }];
-  return await callAI(messages, { maxTokens: 2000 });
+  return await callAI(messages, { maxTokens: 700 });
 };
 
 // 5. AI Fee Recovery Assistant
