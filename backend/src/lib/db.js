@@ -16,6 +16,21 @@ const pool = mysql.createPool({
   // not JS Date objects — avoids server-timezone shifting the date by a
   // day when serialized to JSON (Date always serializes to UTC).
   dateStrings: true,
+  // mysql2 returns DECIMAL columns (every money field: fees, invoices,
+  // commissions, scholarship budgets) as strings by default, to avoid
+  // float precision loss on values the driver can't safely represent as
+  // JS numbers. Our amounts stay well within float64's exact-integer-cents
+  // range, and callers on both sides (frontend `reduce`/arithmetic, backend
+  // sums) assume a number — leaving it a string turns `+` into
+  // concatenation instead of addition. Cast centrally here once instead of
+  // at every call site.
+  typeCast(field, next) {
+    if (field.type === 'DECIMAL' || field.type === 'NEWDECIMAL') {
+      const value = field.string();
+      return value === null ? null : parseFloat(value);
+    }
+    return next();
+  },
   // Prepared statements are cached per connection; cap it so a long-lived
   // pool does not accumulate statements for every ad-hoc query shape.
   maxPreparedStatements: 200,

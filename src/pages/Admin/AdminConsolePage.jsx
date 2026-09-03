@@ -32,7 +32,6 @@ import GlassCard from '../../components/Common/GlassCard';
 import Badge from '../../components/Common/Badge';
 import Button from '../../components/Common/Button';
 import Input from '../../components/Common/Input';
-import Tabs from '../../components/Common/Tabs';
 import {
   changeInstitutionPlan,
   createAdminInstitution,
@@ -514,8 +513,6 @@ export default function AdminConsolePage() {
             </div>
           </GlassCard>
         )}
-
-        <Tabs tabs={ADMIN_TABS} value={activeTab} onChange={setActiveTab} id="admin-console" />
 
         {activeTab === 'overview' && (
         <>

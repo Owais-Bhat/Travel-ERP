@@ -179,7 +179,6 @@ body::before {
    Cards
    ============================================================ */
 .neu-card {
-  position: relative;
   background: var(--neu-bg);
   border-radius: var(--neu-radius-lg);
   box-shadow: var(--neu-e2);
@@ -226,13 +225,24 @@ body::before {
 /* ============================================================
    Buttons
    ============================================================ */
-/* `display` is declared separately at zero specificity so a responsive
-   utility (`lg:hidden`, `md:hidden`) can still hide these — this stylesheet
-   loads after Tailwind, so a normal `.neu-btn { display: … }` would win
-   against the utility and the element could never be hidden. */
-:where(.neu-btn, .btn-primary, .btn-secondary, .btn-danger) { display: inline-flex; }
-:where(.neu-badge, .badge) { display: inline-flex; }
-:where(.neu-alert, .alert) { display: flex; }
+/* `display`/`position` are declared inside Tailwind's own `utilities` layer,
+   at zero specificity, so a Tailwind utility (`lg:hidden`, `absolute`,
+   `fixed`) can still win. This file is plain unlayered CSS loaded after
+   Tailwind, and per the CSS cascade, unlayered rules beat ANY layered rule
+   regardless of specificity — so a normal `.neu-btn { display: … }` would
+   always win against `lg:hidden` (which Tailwind v4 puts in `@layer
+   utilities`), and `.neu-card { position: relative }` would always win
+   against `absolute`/`fixed`, silently turning a positioned dropdown or
+   modal into static in-flow layout. Joining Tailwind's own layer — Tailwind
+   v4's `@import "tailwindcss"` establishes it first, so this just adds
+   rules to that same slot — restores normal specificity resolution between
+   these declarations and Tailwind's utilities. */
+@layer utilities {
+  :where(.neu-btn, .btn-primary, .btn-secondary, .btn-danger) { display: inline-flex; }
+  :where(.neu-badge, .badge) { display: inline-flex; }
+  :where(.neu-alert, .alert) { display: flex; }
+  :where(.neu-card, .glass-card, .glass-card-light) { position: relative; }
+}
 
 .neu-btn {
   align-items: center;
@@ -663,7 +673,6 @@ body::before {
    ============================================================ */
 .glass-card,
 .glass-card-light {
-  position: relative;
   background: var(--neu-bg);
   border: none;
   border-radius: var(--neu-radius-lg);
