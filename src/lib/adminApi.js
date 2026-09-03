@@ -38,6 +38,19 @@ export const fetchSystemHealth = () => unwrap(api.get('/admin/system-health'));
 export const impersonateInstitution = (institutionId) =>
   unwrap(api.post(`/admin/institutions/${institutionId}/impersonate`));
 
+// --- plan & pricing management -----------------------------------------
+export const fetchPlanConfig = () => unwrap(api.get('/admin/plan-config'));
+export const updatePlanLimits = (plan, data) => unwrap(api.put(`/admin/plan-config/${plan}`, data));
+
+// --- platform announcements ---------------------------------------------
+export const fetchAnnouncements = () => unwrap(api.get('/admin/announcements'));
+export const createAnnouncement = (data) => unwrap(api.post('/admin/announcements', data));
+
+// --- super admin team -----------------------------------------------------
+export const fetchSuperAdminTeam = () => unwrap(api.get('/admin/team'));
+export const inviteSuperAdmin = (data) => unwrap(api.post('/admin/team/invite', data));
+export const updateSuperAdminMember = (profileId, data) => unwrap(api.patch(`/admin/team/${profileId}`, data));
+
 // --- institution verification (EIMS) ---------------------------------
 export const fetchVerificationQueue = (status) =>
   unwrap(api.get('/admin/verifications', { params: status ? { status } : {} }));

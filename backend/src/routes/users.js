@@ -19,7 +19,7 @@ import { recordAuditEvent } from '../lib/audit.js';
 import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
 import { z, requiredEmail, optionalText, phone } from '../validation/common.js';
-import { getPlanLimits } from '../saas/features.js';
+import { getEffectivePlanLimits } from '../saas/planOverrides.js';
 import { sendInviteEmail } from '../lib/mailer.js';
 
 const router = express.Router();
@@ -97,7 +97,7 @@ router.post(
       if (!institution) throw ApiError.notFound('Institution not found');
       institutionName = institution.name;
 
-      const limit = getPlanLimits(institution.subscription_plan || 'free').users;
+      const limit = getEffectivePlanLimits(institution.subscription_plan || 'free').users;
       if (limit !== null) {
         const [[{ activeUsers }]] = await connection.execute(
           'SELECT COUNT(*) AS activeUsers FROM user_profiles WHERE institution_id = ? AND is_active = 1',
@@ -199,7 +199,7 @@ router.patch(
         'SELECT subscription_plan FROM institutions WHERE id = ?',
         [req.institutionId]
       );
-      const limit = getPlanLimits(institution?.subscription_plan || 'free').users;
+      const limit = getEffectivePlanLimits(institution?.subscription_plan || 'free').users;
       if (limit !== null) {
         const [[{ activeUsers }]] = await db.execute(
           'SELECT COUNT(*) AS activeUsers FROM user_profiles WHERE institution_id = ? AND is_active = 1',

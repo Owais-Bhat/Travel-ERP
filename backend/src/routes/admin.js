@@ -15,7 +15,10 @@ import { recordAuditEvent } from '../lib/audit.js';
 import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
 import { z, requiredEmail, optionalText, phone, email } from '../validation/common.js';
-import { FEATURE_CATALOG, getBillingState, getPlanFeatureMap, getPlanLimits } from '../saas/features.js';
+import { FEATURE_CATALOG, getBillingState, getPlanFeatureMap, PLAN_LIMITS } from '../saas/features.js';
+import { getEffectivePlanLimits, getPlanOverride, refreshPlanOverrides } from '../saas/planOverrides.js';
+import { sendInviteEmail } from '../lib/mailer.js';
+import crypto from 'node:crypto';
 
 const router = express.Router();
 
@@ -40,7 +43,7 @@ function readSettings(value) {
 function decorateInstitution(institution, { userCount = 0, studentCount = 0 } = {}) {
   const settings = readSettings(institution.settings);
   const plan = institution.subscription_plan || 'free';
-  const limits = getPlanLimits(plan);
+  const limits = getEffectivePlanLimits(plan);
 
   return {
     ...institution,
@@ -589,7 +592,7 @@ router.get(
     const params = institutionId ? [institutionId] : [];
 
     const [events] = await db.query(
-      `SELECT a.*, i.name AS institution_name
+      `SELECT a.*, CASE WHEN a.institution_id IS NULL THEN 'Platform' ELSE i.name END AS institution_name
          FROM activity_log a
          LEFT JOIN institutions i ON i.id = a.institution_id
          ${where}
@@ -745,6 +748,295 @@ router.post(
       },
       institution: { id: institution.id, name: institution.name },
     });
+  })
+);
+
+// ------------------------------------------------------------------
+// Platform announcements — broadcast a message to tenant users. Delivered
+// through the existing per-user notifications table/bell (which already
+// renders a 'announcement' type), with a separate history row here since
+// one broadcast fans out into many notification rows.
+// ------------------------------------------------------------------
+const announcementSchema = z.object({
+  title: z.string().trim().min(1).max(255),
+  body: z.string().trim().min(1).max(2000),
+  severity: z.enum(['info', 'warning', 'success']).default('info'),
+  targetType: z.enum(['all', 'selected']).default('all'),
+  institutionIds: z.array(z.string().uuid()).optional(),
+});
+
+router.get(
+  '/announcements',
+  asyncHandler(async (req, res) => {
+    const [rows] = await db.query(
+      `SELECT a.id, a.title, a.body, a.severity, a.target_type, a.target_institution_ids,
+              a.recipient_count, a.created_at,
+              CONCAT(p.first_name, ' ', COALESCE(p.last_name, '')) AS created_by_name
+         FROM platform_announcements a
+         LEFT JOIN user_profiles p ON p.id = a.created_by
+        ORDER BY a.created_at DESC
+        LIMIT 50`
+    );
+    res.json({ announcements: rows });
+  })
+);
+
+router.post(
+  '/announcements',
+  validate({ body: announcementSchema }),
+  asyncHandler(async (req, res) => {
+    const { title, body, severity, targetType, institutionIds } = req.body;
+    if (targetType === 'selected' && (!institutionIds || institutionIds.length === 0)) {
+      throw ApiError.badRequest('Select at least one institution, or choose "all".');
+    }
+
+    const [recipients] = targetType === 'selected'
+      ? await db.query(
+          `SELECT id, institution_id FROM user_profiles
+            WHERE is_active = 1 AND institution_id IN (?)`,
+          [institutionIds]
+        )
+      : await db.query(
+          `SELECT id, institution_id FROM user_profiles
+            WHERE is_active = 1 AND institution_id IS NOT NULL`
+        );
+
+    const announcementId = uuidv4();
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      await connection.execute(
+        `INSERT INTO platform_announcements
+           (id, title, body, severity, target_type, target_institution_ids, recipient_count, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          announcementId, title, body, severity, targetType,
+          targetType === 'selected' ? JSON.stringify(institutionIds) : null,
+          recipients.length,
+          req.auth?.profile?.id || null,
+        ]
+      );
+
+      if (recipients.length > 0) {
+        const rows = recipients.map((recipient) => [
+          uuidv4(), recipient.institution_id, recipient.id, title, body, 'announcement', req.auth?.profile?.id || null,
+        ]);
+        await connection.query(
+          `INSERT INTO notifications (id, institution_id, user_id, title, body, type, created_by) VALUES ?`,
+          [rows]
+        );
+      }
+
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+
+    await recordAuditEvent(req, {
+      institutionId: null,
+      action: 'platform.announcement_sent',
+      description: `Sent announcement "${title}" to ${recipients.length} user(s)`,
+      entityType: 'platform_announcement',
+      entityId: announcementId,
+      severity: severity === 'warning' ? 'warning' : 'success',
+      metadata: { target_type: targetType, recipient_count: recipients.length },
+    });
+
+    res.status(201).json({ id: announcementId, recipientCount: recipients.length });
+  })
+);
+
+// ------------------------------------------------------------------
+// Plan & pricing management — per-plan seat/student/AI-credit ceilings,
+// editable from the console. Overrides live in `plan_overrides` and are
+// merged over the shipped PLAN_LIMITS defaults by planOverrides.js, which
+// every enforcement point (invites, this decorator) now reads through.
+// ------------------------------------------------------------------
+router.get(
+  '/plan-config',
+  (req, res) => {
+    const plans = PLANS.map((planKey) => ({
+      key: planKey,
+      defaults: PLAN_LIMITS[planKey] || PLAN_LIMITS.free,
+      overrides: getPlanOverride(planKey),
+      effective: getEffectivePlanLimits(planKey),
+    }));
+    res.json({ plans });
+  }
+);
+
+const planOverrideSchema = z.object({
+  users: z.number().int().min(0).nullable(),
+  students: z.number().int().min(0).nullable(),
+  aiCredits: z.number().int().min(0).nullable(),
+});
+
+router.put(
+  '/plan-config/:plan',
+  validate({ params: z.object({ plan: z.enum(PLANS) }), body: planOverrideSchema }),
+  asyncHandler(async (req, res) => {
+    const { plan } = req.params;
+    const { users, students, aiCredits } = req.body;
+
+    await db.execute(
+      `INSERT INTO plan_overrides (plan_key, max_users, max_students, ai_credits, updated_by)
+       VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         max_users = VALUES(max_users), max_students = VALUES(max_students),
+         ai_credits = VALUES(ai_credits), updated_by = VALUES(updated_by)`,
+      [plan, users, students, aiCredits, req.auth?.profile?.id || null]
+    );
+    await refreshPlanOverrides();
+
+    await recordAuditEvent(req, {
+      institutionId: null,
+      action: 'platform.plan_limits_updated',
+      description: `Updated ${plan} plan limits`,
+      entityType: 'plan',
+      entityId: plan,
+      severity: 'info',
+      metadata: { plan, users, students, aiCredits },
+    });
+
+    res.json({
+      key: plan,
+      defaults: PLAN_LIMITS[plan] || PLAN_LIMITS.free,
+      overrides: getPlanOverride(plan),
+      effective: getEffectivePlanLimits(plan),
+    });
+  })
+);
+
+// ------------------------------------------------------------------
+// Super admin team — platform-level users (institution_id IS NULL,
+// role = 'super_admin'). Same invite/temp-password pattern as tenant user
+// invites in users.js, minus the tenant scoping.
+// ------------------------------------------------------------------
+router.get(
+  '/team',
+  asyncHandler(async (req, res) => {
+    const [rows] = await db.execute(
+      `SELECT p.id, p.first_name, p.last_name, p.phone, p.is_active, p.created_at, u.email
+         FROM user_profiles p
+         JOIN users u ON u.id = p.user_id
+        WHERE p.role = 'super_admin'
+        ORDER BY p.created_at ASC`
+    );
+    res.json({ team: rows });
+  })
+);
+
+function generatePlatformTemporaryPassword() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  const bytes = crypto.randomBytes(12);
+  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('');
+}
+
+const teamInviteSchema = z.object({
+  email: requiredEmail,
+  firstName: z.string().trim().min(1).max(100),
+  lastName: optionalText(100),
+  phone,
+});
+
+router.post(
+  '/team/invite',
+  validate({ body: teamInviteSchema }),
+  asyncHandler(async (req, res) => {
+    const normalizedEmail = req.body.email.toLowerCase();
+    const temporaryPassword = generatePlatformTemporaryPassword();
+
+    const [existing] = await db.execute('SELECT id FROM users WHERE email = ?', [normalizedEmail]);
+    if (existing.length > 0) {
+      throw ApiError.conflict('A user with that email already exists.');
+    }
+
+    const userId = uuidv4();
+    const profileId = uuidv4();
+    const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+      await connection.execute(
+        `INSERT INTO users (id, email, password_hash, must_change_password, password_changed_at)
+         VALUES (?, ?, ?, 1, NOW())`,
+        [userId, normalizedEmail, passwordHash]
+      );
+      await connection.execute(
+        `INSERT INTO user_profiles (id, user_id, institution_id, role, first_name, last_name, phone, is_active)
+         VALUES (?, ?, NULL, 'super_admin', ?, ?, ?, 1)`,
+        [profileId, userId, req.body.firstName, req.body.lastName || null, req.body.phone || null]
+      );
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+
+    const { sent: emailSent } = await sendInviteEmail({
+      to: normalizedEmail,
+      firstName: req.body.firstName,
+      institutionName: 'CyberMilo Platform',
+      role: 'super_admin',
+      temporaryPassword,
+    });
+
+    await recordAuditEvent(req, {
+      institutionId: null,
+      action: 'platform.team_member_invited',
+      description: `Invited ${normalizedEmail} as a super admin`,
+      entityType: 'user_profile',
+      entityId: profileId,
+      severity: 'warning',
+      metadata: { invited_email: normalizedEmail, email_sent: emailSent },
+    });
+
+    res.status(201).json({
+      profileId,
+      email: normalizedEmail,
+      temporaryPassword,
+      emailSent,
+    });
+  })
+);
+
+const teamUpdateSchema = z.object({ isActive: z.boolean() });
+
+router.patch(
+  '/team/:profileId',
+  validate({ params: z.object({ profileId: z.string().uuid() }), body: teamUpdateSchema }),
+  asyncHandler(async (req, res) => {
+    if (req.params.profileId === req.auth?.profile?.id) {
+      throw ApiError.badRequest('You cannot deactivate your own account.');
+    }
+
+    const [rows] = await db.execute(
+      `SELECT id FROM user_profiles WHERE id = ? AND role = 'super_admin'`,
+      [req.params.profileId]
+    );
+    if (!rows[0]) throw ApiError.notFound('Super admin not found');
+
+    await db.execute('UPDATE user_profiles SET is_active = ? WHERE id = ?', [
+      req.body.isActive ? 1 : 0, req.params.profileId,
+    ]);
+
+    await recordAuditEvent(req, {
+      institutionId: null,
+      action: req.body.isActive ? 'platform.team_member_reactivated' : 'platform.team_member_deactivated',
+      description: `${req.body.isActive ? 'Reactivated' : 'Deactivated'} super admin account`,
+      entityType: 'user_profile',
+      entityId: req.params.profileId,
+      severity: req.body.isActive ? 'success' : 'warning',
+    });
+
+    res.json({ success: true });
   })
 );
 

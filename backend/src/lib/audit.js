@@ -27,7 +27,9 @@ export async function recordAuditEvent(req, {
   severity = 'info',
   metadata = {},
 }) {
-  if (!institutionId || !action) return null;
+  // institutionId is null for platform-level actions (announcements, plan
+  // limit edits, super-admin team changes) that aren't tied to one tenant.
+  if (!action) return null;
 
   try {
     const payload = {

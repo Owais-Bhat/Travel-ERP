@@ -74,6 +74,7 @@ export async function sendMail({ to, subject, html, text }) {
 }
 
 const ROLE_LABELS = {
+  super_admin: 'Super Admin',
   institution_admin: 'Institution Admin',
   principal: 'Principal',
   teacher: 'Teacher',

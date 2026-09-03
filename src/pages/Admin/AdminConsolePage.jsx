@@ -17,14 +17,19 @@ import {
   MdAdd,
   MdBarChart,
   MdBusiness,
+  MdCampaign,
   MdCheckCircle,
   MdClose,
   MdCreditCard,
   MdDashboard,
+  MdGroupAdd,
   MdHistory,
   MdPeople,
   MdPeopleAlt,
+  MdPriceChange,
+  MdSend,
   MdTune,
+  MdVerifiedUser,
   MdWarning,
 } from 'react-icons/md';
 import MainLayout from '../../components/Layout/MainLayout';
@@ -32,17 +37,29 @@ import GlassCard from '../../components/Common/GlassCard';
 import Badge from '../../components/Common/Badge';
 import Button from '../../components/Common/Button';
 import Input from '../../components/Common/Input';
+import Modal from '../../components/Common/Modal';
 import {
   changeInstitutionPlan,
   createAdminInstitution,
+  createAnnouncement,
+  decideVerification,
   fetchAdminAudit,
   fetchAdminInstitutions,
   fetchAdminUsage,
+  fetchAnnouncements,
+  fetchPlanConfig,
+  fetchSuperAdminTeam,
   fetchSystemHealth,
+  fetchVerificationDocuments,
+  fetchVerificationQueue,
   impersonateInstitution,
+  inviteSuperAdmin,
+  reviewInstitutionDocument,
   searchAdminDirectory,
   setInstitutionFeature,
   updateInstitutionSubscription,
+  updatePlanLimits,
+  updateSuperAdminMember,
 } from '../../lib/adminApi';
 import { setToken, getToken } from '../../lib/api';
 import { fetchInstitutionUsers, inviteInstitutionUser, updateInstitutionUser } from '../../lib/usersApi';
@@ -131,11 +148,22 @@ const ADMIN_TABS = [
   { key: 'overview', label: 'Overview', icon: MdDashboard },
   { key: 'institutions', label: 'Institutions', icon: MdBusiness },
   { key: 'create', label: 'Create Institution', icon: MdAdd },
+  { key: 'verification', label: 'Verification Queue', icon: MdVerifiedUser },
   { key: 'features', label: 'Feature Control', icon: MdTune },
+  { key: 'plans', label: 'Plan & Pricing', icon: MdPriceChange },
   { key: 'users', label: 'Tenant Users', icon: MdPeopleAlt },
   { key: 'usage', label: 'Feature Usage', icon: MdBarChart },
+  { key: 'announcements', label: 'Announcements', icon: MdCampaign },
+  { key: 'team', label: 'Super Admin Team', icon: MdGroupAdd },
   { key: 'audit', label: 'Audit Log', icon: MdHistory },
 ];
+
+const VERIFICATION_STATUS_LABELS = {
+  pending: 'Pending',
+  under_review: 'Under review',
+  verified: 'Verified',
+  rejected: 'Rejected',
+};
 
 const ADMIN_TAB_KEYS = ADMIN_TABS.map((tab) => tab.key);
 
@@ -556,6 +584,225 @@ export default function AdminConsolePage() {
   useEffect(() => {
     fetchSystemHealth().then(setSystemHealth).catch(() => {});
   }, []);
+
+  // ── Verification queue ──────────────────────────────────────────────
+  const [verificationQueue, setVerificationQueue] = useState([]);
+  const [loadingVerification, setLoadingVerification] = useState(false);
+  const [verificationStatusFilter, setVerificationStatusFilter] = useState('');
+  const [verificationDetail, setVerificationDetail] = useState(null); // { institution, documents }
+  const [verificationNotes, setVerificationNotes] = useState('');
+  const [decidingVerification, setDecidingVerification] = useState(false);
+
+  const loadVerificationQueue = async (status = verificationStatusFilter) => {
+    setLoadingVerification(true);
+    setError('');
+    try {
+      const data = await fetchVerificationQueue(status || undefined);
+      setVerificationQueue(data.institutions || []);
+    } catch (err) {
+      setError(err.message || 'Unable to load verification queue');
+    } finally {
+      setLoadingVerification(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'verification' && verificationQueue.length === 0 && !loadingVerification) {
+      loadVerificationQueue();
+    }
+  }, [activeTab]);
+
+  const openVerificationDetail = async (institution) => {
+    setVerificationDetail({ institution, documents: [] });
+    setVerificationNotes('');
+    try {
+      const data = await fetchVerificationDocuments(institution.id);
+      setVerificationDetail({ institution, documents: data.documents || [] });
+    } catch (err) {
+      setError(err.message || 'Unable to load documents');
+    }
+  };
+
+  const handleVerificationDecision = async (status) => {
+    if (!verificationDetail) return;
+    setDecidingVerification(true);
+    setError('');
+    try {
+      await decideVerification(verificationDetail.institution.id, {
+        status,
+        notes: verificationNotes || undefined,
+        publish: status === 'verified',
+      });
+      notification.success(`Institution marked as ${VERIFICATION_STATUS_LABELS[status].toLowerCase()}`);
+      setVerificationDetail(null);
+      loadVerificationQueue();
+      loadInstitutions();
+    } catch (err) {
+      notification.error(err.message || 'Unable to update verification status');
+    } finally {
+      setDecidingVerification(false);
+    }
+  };
+
+  const handleDocumentReview = async (documentId, status) => {
+    try {
+      await reviewInstitutionDocument(documentId, { status });
+      notification.success(`Document ${status}`);
+      if (verificationDetail) openVerificationDetail(verificationDetail.institution);
+    } catch (err) {
+      notification.error(err.message || 'Unable to review document');
+    }
+  };
+
+  // ── Plan & pricing management ───────────────────────────────────────
+  const [planConfig, setPlanConfig] = useState([]);
+  const [loadingPlanConfig, setLoadingPlanConfig] = useState(false);
+  const [planEdits, setPlanEdits] = useState({});
+  const [savingPlan, setSavingPlan] = useState('');
+
+  const loadPlanConfig = async () => {
+    setLoadingPlanConfig(true);
+    setError('');
+    try {
+      const data = await fetchPlanConfig();
+      setPlanConfig(data.plans || []);
+      setPlanEdits(Object.fromEntries((data.plans || []).map(p => [p.key, {
+        users: p.overrides.users ?? '',
+        students: p.overrides.students ?? '',
+        aiCredits: p.overrides.aiCredits ?? '',
+      }])));
+    } catch (err) {
+      setError(err.message || 'Unable to load plan configuration');
+    } finally {
+      setLoadingPlanConfig(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'plans' && planConfig.length === 0 && !loadingPlanConfig) {
+      loadPlanConfig();
+    }
+  }, [activeTab]);
+
+  const handleSavePlanLimits = async (planKey) => {
+    setSavingPlan(planKey);
+    try {
+      const edit = planEdits[planKey] || {};
+      const toNullableInt = (value) => (value === '' || value === null || value === undefined ? null : parseInt(value, 10));
+      await updatePlanLimits(planKey, {
+        users: toNullableInt(edit.users),
+        students: toNullableInt(edit.students),
+        aiCredits: toNullableInt(edit.aiCredits),
+      });
+      notification.success(`${planKey} plan limits updated`);
+      loadPlanConfig();
+    } catch (err) {
+      notification.error(err.message || 'Unable to update plan limits');
+    } finally {
+      setSavingPlan('');
+    }
+  };
+
+  // ── Platform announcements ──────────────────────────────────────────
+  const [announcements, setAnnouncements] = useState([]);
+  const [loadingAnnouncements, setLoadingAnnouncements] = useState(false);
+  const [announcementForm, setAnnouncementForm] = useState({
+    title: '', body: '', severity: 'info', targetType: 'all', institutionIds: [],
+  });
+  const [sendingAnnouncement, setSendingAnnouncement] = useState(false);
+
+  const loadAnnouncements = async () => {
+    setLoadingAnnouncements(true);
+    try {
+      const data = await fetchAnnouncements();
+      setAnnouncements(data.announcements || []);
+    } catch (err) {
+      setError(err.message || 'Unable to load announcements');
+    } finally {
+      setLoadingAnnouncements(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'announcements' && announcements.length === 0 && !loadingAnnouncements) {
+      loadAnnouncements();
+    }
+  }, [activeTab]);
+
+  const handleSendAnnouncement = async (event) => {
+    event.preventDefault();
+    if (!announcementForm.title.trim() || !announcementForm.body.trim()) return;
+    if (announcementForm.targetType === 'selected' && announcementForm.institutionIds.length === 0) {
+      notification.error('Select at least one institution, or choose "All institutions".');
+      return;
+    }
+    setSendingAnnouncement(true);
+    try {
+      const result = await createAnnouncement(announcementForm);
+      notification.success(`Sent to ${result.recipientCount} user(s)`);
+      setAnnouncementForm({ title: '', body: '', severity: 'info', targetType: 'all', institutionIds: [] });
+      loadAnnouncements();
+    } catch (err) {
+      notification.error(err.message || 'Unable to send announcement');
+    } finally {
+      setSendingAnnouncement(false);
+    }
+  };
+
+  // ── Super admin team ────────────────────────────────────────────────
+  const [team, setTeam] = useState([]);
+  const [loadingTeam, setLoadingTeam] = useState(false);
+  const [teamInviteForm, setTeamInviteForm] = useState({ email: '', firstName: '', lastName: '', phone: '' });
+  const [invitingTeamMember, setInvitingTeamMember] = useState(false);
+  const [lastInvitedTeamMember, setLastInvitedTeamMember] = useState(null);
+  const [teamActionBusy, setTeamActionBusy] = useState('');
+
+  const loadTeam = async () => {
+    setLoadingTeam(true);
+    try {
+      const data = await fetchSuperAdminTeam();
+      setTeam(data.team || []);
+    } catch (err) {
+      setError(err.message || 'Unable to load super admin team');
+    } finally {
+      setLoadingTeam(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'team' && team.length === 0 && !loadingTeam) {
+      loadTeam();
+    }
+  }, [activeTab]);
+
+  const handleInviteTeamMember = async (event) => {
+    event.preventDefault();
+    setInvitingTeamMember(true);
+    setLastInvitedTeamMember(null);
+    try {
+      const result = await inviteSuperAdmin(teamInviteForm);
+      setLastInvitedTeamMember(result);
+      notification.success(`Invited ${result.email}`);
+      setTeamInviteForm({ email: '', firstName: '', lastName: '', phone: '' });
+      loadTeam();
+    } catch (err) {
+      notification.error(err.message || 'Unable to invite super admin');
+    } finally {
+      setInvitingTeamMember(false);
+    }
+  };
+
+  const handleToggleTeamMember = async (profileId, isActive) => {
+    setTeamActionBusy(profileId);
+    try {
+      await updateSuperAdminMember(profileId, { isActive });
+      loadTeam();
+    } catch (err) {
+      notification.error(err.message || 'Unable to update team member');
+    } finally {
+      setTeamActionBusy('');
+    }
+  };
 
   const handleSupportInvite = async (event) => {
     event.preventDefault();
@@ -1985,6 +2232,418 @@ export default function AdminConsolePage() {
             </div>
           )}
         </GlassCard>
+        </>
+        )}
+
+        {/* ── VERIFICATION QUEUE ────────────────────────────────────── */}
+        {activeTab === 'verification' && (
+        <>
+        <GlassCard className="p-0 overflow-hidden">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-6 py-5 border-b border-slate-200">
+            <div className="flex items-start gap-3">
+              <div className="rounded-lg bg-[#EEF7F6] p-3 text-[#0E7C7B]">
+                <MdVerifiedUser className="h-6 w-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-950 mb-1">Institution Verification</h2>
+                <p className="text-sm text-slate-500 mb-0">Review submitted documents and approve or reject new institutions.</p>
+              </div>
+            </div>
+            <select
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-[#0E7C7B]"
+              value={verificationStatusFilter}
+              onChange={event => { setVerificationStatusFilter(event.target.value); loadVerificationQueue(event.target.value); }}
+            >
+              <option value="">All statuses</option>
+              {Object.entries(VERIFICATION_STATUS_LABELS).map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
+            </select>
+          </div>
+
+          {loadingVerification ? (
+            <div className="p-10 text-center text-slate-500">Loading queue...</div>
+          ) : verificationQueue.length === 0 ? (
+            <div className="p-10 text-center">
+              <p className="text-slate-950 font-semibold mb-1">Nothing to review</p>
+              <p className="text-slate-500 text-sm mb-0">No institutions match this filter right now.</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {verificationQueue.map(inst => (
+                <div key={inst.id} className="px-6 py-4 flex flex-wrap items-center justify-between gap-3 hover:bg-slate-50/80">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="font-bold text-slate-950 mb-0">{inst.name}</p>
+                      <Badge tone={inst.verification_status === 'verified' ? 'success' : inst.verification_status === 'rejected' ? 'danger' : inst.verification_status === 'under_review' ? 'info' : 'warning'}>
+                        {VERIFICATION_STATUS_LABELS[inst.verification_status] || inst.verification_status}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-slate-500 mb-0">
+                      {inst.email} &bull; {inst.document_count || 0} document(s) submitted
+                    </p>
+                  </div>
+                  <Button type="button" size="sm" variant="secondary" onClick={() => openVerificationDetail(inst)}>
+                    Review
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </GlassCard>
+
+        <Modal
+          open={!!verificationDetail}
+          onClose={() => setVerificationDetail(null)}
+          title={verificationDetail ? `Review — ${verificationDetail.institution.name}` : 'Review Institution'}
+          maxWidth="max-w-2xl"
+          footer={verificationDetail && (
+            <>
+              <Button type="button" variant="secondary" disabled={decidingVerification} onClick={() => setVerificationDetail(null)}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="!bg-red-50 !text-red-700 hover:!bg-red-100"
+                loading={decidingVerification}
+                onClick={() => handleVerificationDecision('rejected')}
+              >
+                Reject
+              </Button>
+              <Button type="button" variant="primary" loading={decidingVerification} onClick={() => handleVerificationDecision('verified')}>
+                Approve &amp; Publish
+              </Button>
+            </>
+          )}
+        >
+          {verificationDetail && (
+            <div className="space-y-4">
+              <div className="text-sm text-slate-600">
+                <p className="mb-1"><span className="font-semibold text-slate-950">Email:</span> {verificationDetail.institution.email}</p>
+                <p className="mb-1"><span className="font-semibold text-slate-950">Type:</span> {verificationDetail.institution.type}</p>
+                <p className="mb-0"><span className="font-semibold text-slate-950">Current status:</span> {VERIFICATION_STATUS_LABELS[verificationDetail.institution.verification_status] || verificationDetail.institution.verification_status}</p>
+              </div>
+
+              <div>
+                <p className="text-sm font-semibold text-slate-950 mb-2">Submitted documents</p>
+                {verificationDetail.documents.length === 0 ? (
+                  <p className="text-sm text-slate-500">No documents submitted yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {verificationDetail.documents.map(doc => (
+                      <div key={doc.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2">
+                        <div className="min-w-0">
+                          <a href={doc.file_url} target="_blank" rel="noreferrer" className="text-sm font-semibold text-[#0E7C7B] hover:underline truncate block">
+                            {doc.name || doc.doc_type}
+                          </a>
+                          <p className="text-xs text-slate-500 mb-0">{doc.doc_type} &bull; {doc.status}</p>
+                        </div>
+                        {doc.status !== 'approved' && (
+                          <Button type="button" size="sm" variant="ghost" onClick={() => handleDocumentReview(doc.id, 'approved')}>
+                            Mark approved
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-950 mb-1">Notes (optional)</label>
+                <textarea
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#0E7C7B]"
+                  rows={3}
+                  value={verificationNotes}
+                  onChange={event => setVerificationNotes(event.target.value)}
+                  placeholder="Reason for rejection, or context for the record..."
+                />
+              </div>
+            </div>
+          )}
+        </Modal>
+        </>
+        )}
+
+        {/* ── PLAN & PRICING MANAGEMENT ─────────────────────────────── */}
+        {activeTab === 'plans' && (
+        <>
+        <GlassCard className="p-6">
+          <div className="flex items-start gap-3 mb-5">
+            <div className="rounded-lg bg-[#EEF4FF] p-3 text-[#4059AD]">
+              <MdPriceChange className="h-6 w-6" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-slate-950 mb-1">Plan &amp; Pricing Limits</h2>
+              <p className="text-sm text-slate-500 mb-0">
+                Override the shipped seat/student/AI-credit ceilings per plan. Leave a field blank to fall back to the default.
+              </p>
+            </div>
+          </div>
+
+          {loadingPlanConfig ? (
+            <div className="p-10 text-center text-slate-500">Loading plan configuration...</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-slate-500">
+                    <th className="py-2 pr-4 font-semibold">Plan</th>
+                    <th className="py-2 pr-4 font-semibold">Max Users <span className="font-normal text-xs">(default)</span></th>
+                    <th className="py-2 pr-4 font-semibold">Max Students <span className="font-normal text-xs">(default)</span></th>
+                    <th className="py-2 pr-4 font-semibold">AI Credits <span className="font-normal text-xs">(default)</span></th>
+                    <th className="py-2 pr-4 font-semibold"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {planConfig.map(plan => (
+                    <tr key={plan.key} className="border-b border-slate-100 last:border-0">
+                      <td className="py-3 pr-4 font-bold text-slate-950 capitalize">{plan.key}</td>
+                      {['users', 'students', 'aiCredits'].map(field => (
+                        <td key={field} className="py-3 pr-4">
+                          <input
+                            type="number"
+                            min="0"
+                            className="w-28 rounded-lg border border-slate-200 px-2 py-1.5 text-sm outline-none focus:border-[#0E7C7B]"
+                            placeholder={plan.defaults[field] === null ? 'Unlimited' : String(plan.defaults[field])}
+                            value={planEdits[plan.key]?.[field] ?? ''}
+                            onChange={event => setPlanEdits(prev => ({
+                              ...prev,
+                              [plan.key]: { ...prev[plan.key], [field]: event.target.value },
+                            }))}
+                          />
+                        </td>
+                      ))}
+                      <td className="py-3 pr-4">
+                        <Button type="button" size="sm" variant="secondary" loading={savingPlan === plan.key} onClick={() => handleSavePlanLimits(plan.key)}>
+                          Save
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </GlassCard>
+        </>
+        )}
+
+        {/* ── PLATFORM ANNOUNCEMENTS ────────────────────────────────── */}
+        {activeTab === 'announcements' && (
+        <>
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr,1.4fr] gap-6">
+          <GlassCard className="p-6">
+            <div className="flex items-start gap-3 mb-5">
+              <div className="rounded-lg bg-orange-50 p-3 text-[#E0644A]">
+                <MdCampaign className="h-6 w-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-950 mb-1">Broadcast an Announcement</h2>
+                <p className="text-sm text-slate-500 mb-0">Delivered as a notification to every targeted tenant user.</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSendAnnouncement} className="space-y-4">
+              <Input
+                label="Title"
+                value={announcementForm.title}
+                onChange={event => setAnnouncementForm(prev => ({ ...prev, title: event.target.value }))}
+                required
+              />
+              <div>
+                <label className="block text-sm font-semibold text-slate-950 mb-1">Message</label>
+                <textarea
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#0E7C7B]"
+                  rows={4}
+                  value={announcementForm.body}
+                  onChange={event => setAnnouncementForm(prev => ({ ...prev, body: event.target.value }))}
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-950 mb-1">Severity</label>
+                  <select
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#0E7C7B]"
+                    value={announcementForm.severity}
+                    onChange={event => setAnnouncementForm(prev => ({ ...prev, severity: event.target.value }))}
+                  >
+                    <option value="info">Info</option>
+                    <option value="warning">Warning</option>
+                    <option value="success">Success</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-950 mb-1">Audience</label>
+                  <select
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#0E7C7B]"
+                    value={announcementForm.targetType}
+                    onChange={event => setAnnouncementForm(prev => ({ ...prev, targetType: event.target.value, institutionIds: [] }))}
+                  >
+                    <option value="all">All institutions</option>
+                    <option value="selected">Selected institutions</option>
+                  </select>
+                </div>
+              </div>
+
+              {announcementForm.targetType === 'selected' && (
+                <div>
+                  <label className="block text-sm font-semibold text-slate-950 mb-1">Institutions</label>
+                  <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 p-2 space-y-1">
+                    {institutions.map(inst => (
+                      <label key={inst.id} className="flex items-center gap-2 text-sm text-slate-700 px-1 py-0.5">
+                        <input
+                          type="checkbox"
+                          checked={announcementForm.institutionIds.includes(inst.id)}
+                          onChange={event => setAnnouncementForm(prev => ({
+                            ...prev,
+                            institutionIds: event.target.checked
+                              ? [...prev.institutionIds, inst.id]
+                              : prev.institutionIds.filter(id => id !== inst.id),
+                          }))}
+                        />
+                        {inst.name}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <Button type="submit" loading={sendingAnnouncement} className="w-full">
+                <MdSend className="mr-1.5 inline h-4 w-4" /> Send Announcement
+              </Button>
+            </form>
+          </GlassCard>
+
+          <GlassCard className="p-0 overflow-hidden">
+            <div className="px-6 py-5 border-b border-slate-200">
+              <h2 className="text-lg font-bold text-slate-950 mb-1">History</h2>
+              <p className="text-sm text-slate-500 mb-0">Last 50 broadcasts.</p>
+            </div>
+            {loadingAnnouncements ? (
+              <div className="p-10 text-center text-slate-500">Loading...</div>
+            ) : announcements.length === 0 ? (
+              <div className="p-10 text-center text-slate-500">No announcements sent yet.</div>
+            ) : (
+              <div className="divide-y divide-slate-100 max-h-[32rem] overflow-y-auto">
+                {announcements.map(item => (
+                  <div key={item.id} className="px-6 py-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="font-bold text-slate-950 mb-0">{item.title}</p>
+                      <Badge tone={item.severity === 'warning' ? 'warning' : item.severity === 'success' ? 'success' : 'info'}>
+                        {item.severity}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-slate-600 mb-1">{item.body}</p>
+                    <p className="text-xs text-slate-500 mb-0">
+                      {item.target_type === 'all' ? 'All institutions' : 'Selected institutions'} &bull; {item.recipient_count} recipient(s)
+                      &bull; {item.created_at ? new Date(item.created_at).toLocaleString('en-IN') : '-'}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </GlassCard>
+        </div>
+        </>
+        )}
+
+        {/* ── SUPER ADMIN TEAM ──────────────────────────────────────── */}
+        {activeTab === 'team' && (
+        <>
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr,1.4fr] gap-6">
+          <GlassCard className="p-6">
+            <div className="flex items-start gap-3 mb-5">
+              <div className="rounded-lg bg-[#EEF7F6] p-3 text-[#0E7C7B]">
+                <MdGroupAdd className="h-6 w-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-950 mb-1">Invite Super Admin</h2>
+                <p className="text-sm text-slate-500 mb-0">Grants full platform access — no institution scope.</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleInviteTeamMember} className="space-y-4">
+              <Input
+                label="Email"
+                type="email"
+                value={teamInviteForm.email}
+                onChange={event => setTeamInviteForm(prev => ({ ...prev, email: event.target.value }))}
+                required
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="First name"
+                  value={teamInviteForm.firstName}
+                  onChange={event => setTeamInviteForm(prev => ({ ...prev, firstName: event.target.value }))}
+                  required
+                />
+                <Input
+                  label="Last name"
+                  value={teamInviteForm.lastName}
+                  onChange={event => setTeamInviteForm(prev => ({ ...prev, lastName: event.target.value }))}
+                />
+              </div>
+              <Input
+                label="Phone (optional)"
+                value={teamInviteForm.phone}
+                onChange={event => setTeamInviteForm(prev => ({ ...prev, phone: event.target.value }))}
+              />
+              <Button type="submit" loading={invitingTeamMember} className="w-full">
+                Send Invite
+              </Button>
+            </form>
+
+            {lastInvitedTeamMember && (
+              <div className="mt-4 rounded-lg border border-[#0E7C7B]/30 bg-[#EEF7F6] p-4">
+                <p className="text-sm font-semibold text-slate-950 mb-1">
+                  Invited {lastInvitedTeamMember.email}
+                  {lastInvitedTeamMember.emailSent ? ' — email sent.' : ' — email delivery is not configured, share this password directly:'}
+                </p>
+                {!lastInvitedTeamMember.emailSent && (
+                  <code className="block text-sm font-bold text-[#0E7C7B]">{lastInvitedTeamMember.temporaryPassword}</code>
+                )}
+              </div>
+            )}
+          </GlassCard>
+
+          <GlassCard className="p-0 overflow-hidden">
+            <div className="px-6 py-5 border-b border-slate-200">
+              <h2 className="text-lg font-bold text-slate-950 mb-1">Current Team</h2>
+              <p className="text-sm text-slate-500 mb-0">{team.length} super admin(s).</p>
+            </div>
+            {loadingTeam ? (
+              <div className="p-10 text-center text-slate-500">Loading...</div>
+            ) : team.length === 0 ? (
+              <div className="p-10 text-center text-slate-500">No super admins found.</div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {team.map(member => (
+                  <div key={member.id} className="px-6 py-4 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-950 mb-0.5">{member.first_name} {member.last_name}</p>
+                      <p className="text-sm text-slate-500 mb-0">{member.email}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge tone={member.is_active ? 'success' : 'neutral'}>{member.is_active ? 'Active' : 'Inactive'}</Badge>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        loading={teamActionBusy === member.id}
+                        onClick={() => handleToggleTeamMember(member.id, !member.is_active)}
+                      >
+                        {member.is_active ? 'Deactivate' : 'Reactivate'}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </GlassCard>
+        </div>
         </>
         )}
       </div>

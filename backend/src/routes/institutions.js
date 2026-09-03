@@ -19,9 +19,10 @@ import { validate } from '../lib/validate.js';
 import { buildUpdate } from '../lib/query.js';
 import { z, optionalText, longText, email, phone } from '../validation/common.js';
 import {
-  getBillingState, getPlanFeatureMap, getPlanLimits, getEffectiveFeatureMap,
+  getBillingState, getPlanFeatureMap, getEffectiveFeatureMap,
   sanitizeRoleFeatures, RESTRICTABLE_ROLES, FEATURE_CATALOG,
 } from '../saas/features.js';
+import { getEffectivePlanLimits } from '../saas/planOverrides.js';
 
 const router = express.Router();
 
@@ -61,7 +62,7 @@ router.get(
       ...institution,
       settings,
       billing_state: getBillingState({ ...institution, settings }),
-      plan_limits: getPlanLimits(plan),
+      plan_limits: getEffectivePlanLimits(plan),
       enabled_modules: getPlanFeatureMap(plan, settings.modules || {}),
       // What the *caller's own role* can actually see — the plan ceiling
       // narrowed by any per-role restriction the tenant admin has set.
