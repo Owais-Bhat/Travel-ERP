@@ -36,6 +36,8 @@ import notificationsRouter from './routes/notifications.js';
 import communicationRouter from './routes/communication.js';
 import lmsRouter from './routes/lms.js';
 import transportRouter from './routes/transport.js';
+import libraryRouter from './routes/library.js';
+import hostelRouter from './routes/hostel.js';
 
 const app = express();
 
@@ -138,6 +140,8 @@ app.use('/api/notifications', notificationsRouter);
 app.use('/api/communication', communicationRouter);
 app.use('/api/lms', lmsRouter);
 app.use('/api/transport', transportRouter);
+app.use('/api/library', libraryRouter);
+app.use('/api/hostel', hostelRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

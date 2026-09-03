@@ -27,6 +27,8 @@ import ExamsPage from './pages/Modules/ExamsPage';
 import LmsPage from './pages/Modules/LmsPage';
 import CommunicationPage from './pages/Modules/CommunicationPage';
 import TransportPage from './pages/Modules/TransportPage';
+import LibraryPage from './pages/Modules/LibraryPage';
+import HostelPage from './pages/Modules/HostelPage';
 import AdmissionsPage from './pages/Modules/AdmissionsPage';
 
 // EIMS Modules
@@ -161,6 +163,22 @@ function App() {
                 element={
                   <GuardedPage path="/transport" feature="transport">
                     <TransportPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/hostel"
+                element={
+                  <GuardedPage path="/hostel" feature="hostel">
+                    <HostelPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/library"
+                element={
+                  <GuardedPage path="/library" feature="library">
+                    <LibraryPage />
                   </GuardedPage>
                 }
               />

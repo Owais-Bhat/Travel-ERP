@@ -31,8 +31,8 @@ export const FEATURE_CATALOG = [
   { key: 'reports_builder', label: 'Custom Report Builder', category: 'platform', route: null, status: 'planned' },
   { key: 'payments', label: 'Payment Gateway', category: 'platform', route: null, status: 'planned' },
   { key: 'whatsapp_sms', label: 'WhatsApp & SMS', category: 'engagement', route: null, status: 'planned' },
-  { key: 'hostel', label: 'Hostel', category: 'extensions', route: null, status: 'planned' },
-  { key: 'library', label: 'Library', category: 'extensions', route: null, status: 'planned' },
+  { key: 'hostel', label: 'Hostel', category: 'extensions', route: '/hostel', status: 'live' },
+  { key: 'library', label: 'Library', category: 'extensions', route: '/library', status: 'live' },
   { key: 'inventory', label: 'Inventory', category: 'extensions', route: null, status: 'planned' },
   { key: 'payroll', label: 'HR & Payroll', category: 'extensions', route: null, status: 'planned' },
   { key: 'video_classes', label: 'Video Classes', category: 'engagement', route: null, status: 'planned' },
@@ -57,13 +57,13 @@ export const PLAN_DEFINITIONS = {
   growth: {
     label: 'Growth',
     monthlyPrice: 4999,
-    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'ai_tutor', 'performance_analysis', 'documents', 'leads', 'programs', 'certifications', 'reports'],
+    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'ai_tutor', 'performance_analysis', 'documents', 'leads', 'programs', 'certifications', 'reports'],
     limits: { users: 100, students: 2000, aiCredits: 1000 },
   },
   pro: {
     label: 'Pro',
     monthlyPrice: 9999,
-    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments', 'documents', 'leads', 'programs', 'certifications', 'reports', 'scholarships', 'referrals'],
+    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments', 'documents', 'leads', 'programs', 'certifications', 'reports', 'scholarships', 'referrals'],
     limits: { users: 300, students: 10000, aiCredits: 5000 },
   },
   enterprise: {

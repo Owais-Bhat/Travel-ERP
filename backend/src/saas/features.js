@@ -22,8 +22,8 @@ export const FEATURE_CATALOG = [
   { key: 'reports_builder', label: 'Custom Report Builder', status: 'planned' },
   { key: 'payments', label: 'Payment Gateway', status: 'planned' },
   { key: 'whatsapp_sms', label: 'WhatsApp & SMS', status: 'planned' },
-  { key: 'hostel', label: 'Hostel', status: 'planned' },
-  { key: 'library', label: 'Library', status: 'planned' },
+  { key: 'hostel', label: 'Hostel', status: 'live' },
+  { key: 'library', label: 'Library', status: 'live' },
   { key: 'inventory', label: 'Inventory', status: 'planned' },
   { key: 'payroll', label: 'HR & Payroll', status: 'planned' },
   { key: 'video_classes', label: 'Video Classes', status: 'planned' },
@@ -35,8 +35,8 @@ export const FEATURE_CATALOG = [
 export const PLAN_DEFINITIONS = {
   free: ['dashboard', 'students', 'attendance'],
   starter: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'exams', 'communication', 'documents', 'leads'],
-  growth: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'ai_tutor', 'performance_analysis', 'documents', 'leads', 'programs', 'certifications', 'reports'],
-  pro: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments', 'documents', 'leads', 'programs', 'certifications', 'reports', 'scholarships', 'referrals'],
+  growth: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'ai_tutor', 'performance_analysis', 'documents', 'leads', 'programs', 'certifications', 'reports'],
+  pro: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments', 'documents', 'leads', 'programs', 'certifications', 'reports', 'scholarships', 'referrals'],
   enterprise: FEATURE_CATALOG.map(feature => feature.key),
 };
 

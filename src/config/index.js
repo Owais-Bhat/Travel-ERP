@@ -119,6 +119,8 @@ const TENANT_ADMIN_MENU = [
     subItems: [
       { key: 'documents', label: 'Documents', path: '/documents' },
       { key: 'transport', label: 'Transport', path: '/transport' },
+      { key: 'hostel', label: 'Hostel', path: '/hostel' },
+      { key: 'library', label: 'Library', path: '/library' },
       { key: 'communication', label: 'Communication', path: '/communication' },
     ],
   },
