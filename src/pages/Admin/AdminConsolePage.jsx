@@ -38,10 +38,15 @@ import {
   fetchAdminAudit,
   fetchAdminInstitutions,
   fetchAdminUsage,
+  fetchSystemHealth,
+  impersonateInstitution,
+  searchAdminDirectory,
   setInstitutionFeature,
   updateInstitutionSubscription,
 } from '../../lib/adminApi';
+import { setToken, getToken } from '../../lib/api';
 import { fetchInstitutionUsers, inviteInstitutionUser, updateInstitutionUser } from '../../lib/usersApi';
+import { useNotification } from '../../hooks/useNotification';
 import { FEATURE_CATALOG, FEATURE_CATEGORIES, PLAN_DEFINITIONS, getBillingState, getPlanFeatureMap, getPlanLimits } from '../../saas/features';
 
 const ROLE_OPTIONS = ['institution_admin', 'principal', 'teacher', 'student', 'parent', 'staff'];
@@ -136,6 +141,7 @@ const ADMIN_TAB_KEYS = ADMIN_TABS.map((tab) => tab.key);
 
 export default function AdminConsolePage() {
   const navigate = useNavigate();
+  const notification = useNotification();
   const { tab: tabParam } = useParams();
   const [activeTab, setActiveTabState] = useState(ADMIN_TAB_KEYS.includes(tabParam) ? tabParam : 'overview');
 
@@ -196,11 +202,13 @@ export default function AdminConsolePage() {
     }
   };
 
-  const loadAudit = async () => {
+  const [auditInstitutionFilter, setAuditInstitutionFilter] = useState('');
+
+  const loadAudit = async (institutionId = auditInstitutionFilter) => {
     setLoadingAudit(true);
     setError('');
     try {
-      const data = await fetchAdminAudit({ limit: 40 });
+      const data = await fetchAdminAudit({ limit: 100, ...(institutionId ? { institutionId } : {}) });
       setAuditEvents(data.events || []);
     } catch (err) {
       setError(err.message || 'Unable to load audit feed');
@@ -408,6 +416,147 @@ export default function AdminConsolePage() {
     }
   };
 
+  // ── Bulk actions ──────────────────────────────────────────────────────
+  const [selectedInstIds, setSelectedInstIds] = useState(() => new Set());
+  const [bulkPlan, setBulkPlan] = useState('starter');
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  const toggleSelectInst = (id, event) => {
+    event.stopPropagation();
+    setSelectedInstIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllFiltered = () => {
+    setSelectedInstIds(prev => {
+      const allSelected = filteredInstitutions.length > 0
+        && filteredInstitutions.every(inst => prev.has(inst.id));
+      return allSelected ? new Set() : new Set(filteredInstitutions.map(inst => inst.id));
+    });
+  };
+
+  const runBulkAction = async (label, ids, action) => {
+    setBulkBusy(true);
+    setError('');
+    const results = await Promise.allSettled(ids.map(action));
+    setBulkBusy(false);
+    const failed = results.filter(r => r.status === 'rejected').length;
+    if (failed > 0) {
+      setError(`${label}: ${ids.length - failed} succeeded, ${failed} failed.`);
+    }
+    await loadInstitutions();
+    setSelectedInstIds(new Set());
+  };
+
+  const handleBulkChangePlan = () => runBulkAction(
+    'Bulk plan change',
+    Array.from(selectedInstIds),
+    (id) => changeInstitutionPlan({ institutionId: id, plan: bulkPlan })
+  );
+
+  const handleBulkSuspend = () => runBulkAction(
+    'Bulk suspend',
+    Array.from(selectedInstIds),
+    (id) => updateInstitutionSubscription({ institutionId: id, status: 'suspended' })
+  );
+
+  const handleBulkActivate = () => runBulkAction(
+    'Bulk activate',
+    Array.from(selectedInstIds),
+    (id) => updateInstitutionSubscription({ institutionId: id, status: 'active' })
+  );
+
+  // ── CSV export ────────────────────────────────────────────────────────
+  const downloadCsv = (filename, headers, rows) => {
+    const escape = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const csv = [headers.join(','), ...rows.map(row => row.map(escape).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportInstitutionsCsv = () => {
+    downloadCsv(
+      `institutions_${new Date().toISOString().slice(0, 10)}.csv`,
+      ['Name', 'Email', 'Type', 'Plan', 'Billing State', 'Health Score', 'Users', 'Students', 'Created'],
+      filteredInstitutions.map(inst => [
+        inst.name, inst.email || '', inst.type || 'School',
+        inst.subscription_plan || 'free', inst.billing_state || getBillingState(inst),
+        tenantHealth[inst.id]?.score ?? '', inst.user_count || 0, inst.student_count || 0,
+        inst.created_at ? new Date(inst.created_at).toLocaleDateString('en-IN') : '',
+      ])
+    );
+    notification.success('Institutions exported');
+  };
+
+  const exportAuditCsv = () => {
+    downloadCsv(
+      `audit_log_${new Date().toISOString().slice(0, 10)}.csv`,
+      ['Date', 'Action', 'Institution', 'Severity', 'Description'],
+      auditEvents.map(event => [
+        event.created_at ? new Date(event.created_at).toLocaleString('en-IN') : '',
+        formatAuditAction(event.action),
+        event.institutions?.name || '',
+        event.severity || 'info',
+        event.description || '',
+      ])
+    );
+  };
+
+  // ── Impersonate ───────────────────────────────────────────────────────
+  const [impersonating, setImpersonating] = useState(false);
+
+  const handleImpersonate = async (institution) => {
+    if (!window.confirm(`Sign in as ${institution.name}'s admin? This starts a support session — you can return to Super Admin any time.`)) {
+      return;
+    }
+    setImpersonating(true);
+    setError('');
+    try {
+      const { token } = await impersonateInstitution(institution.id);
+      sessionStorage.setItem('cybermilo_impersonation_origin_token', getToken());
+      sessionStorage.setItem('cybermilo_impersonation_origin_name', institution.name);
+      setToken(token);
+      window.location.href = '/dashboard';
+    } catch (err) {
+      setError(err.message || 'Unable to impersonate this institution');
+      setImpersonating(false);
+    }
+  };
+
+  // ── Global search ────────────────────────────────────────────────────
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState(null);
+  const [searching, setSearching] = useState(false);
+
+  const runGlobalSearch = async (event) => {
+    event.preventDefault();
+    if (searchQuery.trim().length < 2) return;
+    setSearching(true);
+    try {
+      const data = await searchAdminDirectory(searchQuery.trim());
+      setSearchResults(data);
+    } catch (err) {
+      setError(err.message || 'Search failed');
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  // ── System health ────────────────────────────────────────────────────
+  const [systemHealth, setSystemHealth] = useState(null);
+
+  useEffect(() => {
+    fetchSystemHealth().then(setSystemHealth).catch(() => {});
+  }, []);
+
   const handleSupportInvite = async (event) => {
     event.preventDefault();
     if (!selectedInstitution) return;
@@ -516,6 +665,116 @@ export default function AdminConsolePage() {
 
         {activeTab === 'overview' && (
         <>
+        <GlassCard className="p-5">
+          <p className="text-sm font-semibold text-slate-500 mb-3">Global Search</p>
+          <form onSubmit={runGlobalSearch} className="flex flex-wrap gap-3">
+            <Input
+              wrapperClass="flex-1 min-w-64 mb-0"
+              placeholder="Search any institution, user, or student across every tenant..."
+              value={searchQuery}
+              onChange={event => setSearchQuery(event.target.value)}
+            />
+            <Button type="submit" loading={searching} disabled={searchQuery.trim().length < 2}>
+              Search
+            </Button>
+            {searchResults && (
+              <Button type="button" variant="ghost" onClick={() => { setSearchResults(null); setSearchQuery(''); }}>
+                Clear
+              </Button>
+            )}
+          </form>
+
+          {searchResults && (
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-slate-500 mb-2">
+                  Institutions ({searchResults.institutions.length})
+                </p>
+                {searchResults.institutions.length === 0 ? (
+                  <p className="text-sm text-slate-400 mb-0">No matches</p>
+                ) : searchResults.institutions.map(inst => (
+                  <button
+                    key={inst.id}
+                    type="button"
+                    onClick={() => openTenantDetail(inst.id)}
+                    className="block w-full text-left rounded-lg px-3 py-2 mb-1 hover:bg-slate-50 border border-slate-100"
+                  >
+                    <p className="text-sm font-bold text-slate-950 mb-0">{inst.name}</p>
+                    <p className="text-xs text-slate-500 mb-0">{inst.email || 'No email'}</p>
+                  </button>
+                ))}
+              </div>
+              <div>
+                <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-slate-500 mb-2">
+                  Users ({searchResults.users.length})
+                </p>
+                {searchResults.users.length === 0 ? (
+                  <p className="text-sm text-slate-400 mb-0">No matches</p>
+                ) : searchResults.users.map(user => (
+                  <button
+                    key={user.profile_id}
+                    type="button"
+                    onClick={() => user.institution_id && openTenantDetail(user.institution_id)}
+                    className="block w-full text-left rounded-lg px-3 py-2 mb-1 hover:bg-slate-50 border border-slate-100"
+                  >
+                    <p className="text-sm font-bold text-slate-950 mb-0">
+                      {[user.first_name, user.last_name].filter(Boolean).join(' ') || user.email}
+                    </p>
+                    <p className="text-xs text-slate-500 mb-0">{user.email} · {user.institution_name || 'No institution'}</p>
+                  </button>
+                ))}
+              </div>
+              <div>
+                <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-slate-500 mb-2">
+                  Students ({searchResults.students.length})
+                </p>
+                {searchResults.students.length === 0 ? (
+                  <p className="text-sm text-slate-400 mb-0">No matches</p>
+                ) : searchResults.students.map(student => (
+                  <button
+                    key={student.id}
+                    type="button"
+                    onClick={() => student.institution_id && openTenantDetail(student.institution_id)}
+                    className="block w-full text-left rounded-lg px-3 py-2 mb-1 hover:bg-slate-50 border border-slate-100"
+                  >
+                    <p className="text-sm font-bold text-slate-950 mb-0">
+                      {[student.first_name, student.last_name].filter(Boolean).join(' ')}
+                    </p>
+                    <p className="text-xs text-slate-500 mb-0">{student.admission_no || 'No admission no.'} · {student.institution_name || 'No institution'}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </GlassCard>
+
+        {systemHealth && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+            <GlassCard className="p-5">
+              <p className="text-sm font-semibold text-slate-500 mb-1">API Uptime</p>
+              <p className="text-2xl font-extrabold text-slate-950 mb-0">
+                {Math.floor(systemHealth.api.uptimeSeconds / 3600)}h {Math.floor((systemHealth.api.uptimeSeconds % 3600) / 60)}m
+              </p>
+            </GlassCard>
+            <GlassCard className="p-5">
+              <p className="text-sm font-semibold text-slate-500 mb-1">Memory</p>
+              <p className="text-2xl font-extrabold text-slate-950 mb-0">{systemHealth.api.memoryMb} MB</p>
+            </GlassCard>
+            <GlassCard className="p-5">
+              <p className="text-sm font-semibold text-slate-500 mb-1">DB Connections</p>
+              <p className="text-2xl font-extrabold text-slate-950 mb-0">
+                {systemHealth.database.connected ? systemHealth.database.activeConnections : '—'}
+              </p>
+            </GlassCard>
+            <GlassCard className="p-5">
+              <p className="text-sm font-semibold text-slate-500 mb-1">Error Rate (24h)</p>
+              <p className={`text-2xl font-extrabold mb-0 ${systemHealth.activity24h.errorRatePercent > 5 ? 'text-red-500' : 'text-slate-950'}`}>
+                {systemHealth.activity24h.errorRatePercent}%
+              </p>
+            </GlassCard>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
           <Metric icon={MdBusiness} label="Institutions" value={institutions.length} tone="teal" />
           <Metric icon={MdPeople} label="Active Users" value={activeUsers} tone="indigo" />
@@ -781,6 +1040,15 @@ export default function AdminConsolePage() {
                 >
                   Refresh Users
                 </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => handleImpersonate(selectedInstitution)}
+                  loading={impersonating}
+                >
+                  Impersonate
+                </Button>
                 <button
                   type="button"
                   onClick={() => setTenantDetailOpen(false)}
@@ -892,7 +1160,17 @@ export default function AdminConsolePage() {
                 <div className="rounded-xl border border-slate-200 bg-white p-4">
                   <div className="flex items-center justify-between gap-3 mb-3">
                     <p className="text-sm font-bold text-slate-950 mb-0">Recent Audit</p>
-                    <Badge status="active">{auditForSelectedInstitution.length}</Badge>
+                    <button
+                      type="button"
+                      className="text-xs font-bold text-[#0E7C7B] hover:underline"
+                      onClick={() => {
+                        setAuditInstitutionFilter(selectedInstitution.id);
+                        loadAudit(selectedInstitution.id);
+                        setActiveTab('audit');
+                      }}
+                    >
+                      View full timeline →
+                    </button>
                   </div>
                   {auditForSelectedInstitution.length === 0 ? (
                     <p className="text-sm text-slate-500 mb-0">No recent audit events for this tenant.</p>
@@ -927,19 +1205,36 @@ export default function AdminConsolePage() {
               <div>
                 <h2 className="text-xl font-bold text-slate-950 mb-1">Audit Activity</h2>
                 <p className="text-sm text-slate-500 mb-0">
-                  Recent Super Admin and tenant admin actions across SaaS accounts.
+                  {auditInstitutionFilter
+                    ? `Activity timeline for ${institutions.find(inst => inst.id === auditInstitutionFilter)?.name || 'this tenant'}.`
+                    : 'Recent Super Admin and tenant admin actions across SaaS accounts.'}
                 </p>
               </div>
             </div>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              loading={loadingAudit}
-              onClick={loadAudit}
-            >
-              Refresh
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-[#0E7C7B]"
+                value={auditInstitutionFilter}
+                onChange={event => { setAuditInstitutionFilter(event.target.value); loadAudit(event.target.value); }}
+              >
+                <option value="">All institutions</option>
+                {institutions.map(inst => (
+                  <option key={inst.id} value={inst.id}>{inst.name}</option>
+                ))}
+              </select>
+              <Button type="button" variant="secondary" size="sm" onClick={exportAuditCsv} disabled={auditEvents.length === 0}>
+                Export CSV
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                loading={loadingAudit}
+                onClick={() => loadAudit()}
+              >
+                Refresh
+              </Button>
+            </div>
           </div>
 
           {auditEvents.length === 0 ? (
@@ -950,8 +1245,8 @@ export default function AdminConsolePage() {
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-slate-100">
-              {auditEvents.slice(0, 8).map(event => (
+            <div className="divide-y divide-slate-100 max-h-[36rem] overflow-y-auto">
+              {auditEvents.map(event => (
                 <div key={event.id} className="px-6 py-4 hover:bg-slate-50/80 transition-colors">
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div className="min-w-0">
@@ -1548,10 +1843,43 @@ export default function AdminConsolePage() {
         {activeTab === 'institutions' && (
         <>
         <GlassCard className="p-0 overflow-hidden">
-          <div className="px-6 py-5 border-b border-slate-200">
-            <h2 className="text-xl font-bold text-slate-950 mb-1">Institution Accounts</h2>
-            <p className="text-sm text-slate-500 mb-0">Tenant-level overview for SaaS operations.</p>
+          <div className="px-6 py-5 border-b border-slate-200 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-slate-950 mb-1">Institution Accounts</h2>
+              <p className="text-sm text-slate-500 mb-0">Tenant-level overview for SaaS operations.</p>
+            </div>
+            <Button type="button" variant="secondary" size="sm" onClick={exportInstitutionsCsv} disabled={filteredInstitutions.length === 0}>
+              Export CSV
+            </Button>
           </div>
+
+          {selectedInstIds.size > 0 && (
+            <div className="px-6 py-3 border-b border-slate-200 bg-[#EEF7F6] flex flex-wrap items-center gap-3">
+              <span className="text-sm font-bold text-slate-950">{selectedInstIds.size} selected</span>
+              <select
+                className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm font-semibold text-slate-700 outline-none focus:border-[#0E7C7B]"
+                value={bulkPlan}
+                onChange={event => setBulkPlan(event.target.value)}
+                disabled={bulkBusy}
+              >
+                {Object.keys(PLAN_DEFINITIONS).map(planKey => (
+                  <option key={planKey} value={planKey}>{PLAN_DEFINITIONS[planKey].label}</option>
+                ))}
+              </select>
+              <Button type="button" size="sm" variant="secondary" loading={bulkBusy} onClick={handleBulkChangePlan}>
+                Change Plan
+              </Button>
+              <Button type="button" size="sm" variant="secondary" loading={bulkBusy} onClick={handleBulkActivate}>
+                Activate
+              </Button>
+              <Button type="button" size="sm" variant="secondary" loading={bulkBusy} onClick={handleBulkSuspend}>
+                Suspend
+              </Button>
+              <Button type="button" size="sm" variant="ghost" disabled={bulkBusy} onClick={() => setSelectedInstIds(new Set())}>
+                Clear
+              </Button>
+            </div>
+          )}
 
           {loading ? (
             <div className="p-10 text-center text-slate-500">Loading accounts...</div>
@@ -1581,6 +1909,14 @@ export default function AdminConsolePage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="px-4 py-3 w-10">
+                      <input
+                        type="checkbox"
+                        checked={filteredInstitutions.length > 0 && filteredInstitutions.every(inst => selectedInstIds.has(inst.id))}
+                        onChange={toggleSelectAllFiltered}
+                        aria-label="Select all institutions"
+                      />
+                    </th>
                     <th className="text-left px-5 py-3 text-slate-500 font-bold">Institution</th>
                     <th className="text-left px-5 py-3 text-slate-500 font-bold">Health</th>
                     <th className="text-left px-5 py-3 text-slate-500 font-bold">Type</th>
@@ -1600,6 +1936,14 @@ export default function AdminConsolePage() {
                       onClick={() => openTenantDetail(inst.id)}
                       className="cursor-pointer border-b border-slate-100 hover:bg-slate-50"
                     >
+                      <td className="px-4 py-4" onClick={event => event.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedInstIds.has(inst.id)}
+                          onChange={event => toggleSelectInst(inst.id, event)}
+                          aria-label={`Select ${inst.name}`}
+                        />
+                      </td>
                       <td className="px-5 py-4">
                         <p className="font-bold text-slate-950 mb-0">{inst.name}</p>
                         <p className="text-xs text-slate-500 mb-0">{inst.email || 'No email'}</p>

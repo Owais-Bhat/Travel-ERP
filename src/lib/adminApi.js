@@ -30,6 +30,14 @@ export const suspendInstitution = (data) =>
 export const setInstitutionFeature = (data) =>
   unwrap(api.post('/admin/set-feature', data));
 
+export const searchAdminDirectory = (q) =>
+  unwrap(api.get('/admin/search', { params: { q } }));
+
+export const fetchSystemHealth = () => unwrap(api.get('/admin/system-health'));
+
+export const impersonateInstitution = (institutionId) =>
+  unwrap(api.post(`/admin/institutions/${institutionId}/impersonate`));
+
 // --- institution verification (EIMS) ---------------------------------
 export const fetchVerificationQueue = (status) =>
   unwrap(api.get('/admin/verifications', { params: status ? { status } : {} }));

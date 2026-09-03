@@ -274,6 +274,30 @@ Format as detailed JSON.`;
   return await callAI(messages, { maxTokens: 2000 });
 };
 
+// 11. AI Exam Result Summary
+export const summarizeExamResults = async (examData) => {
+  const prompt = `Write a short, plain-language summary of this exam's results for a school administrator.
+
+Exam: ${examData.title} (${examData.subject}, ${examData.class_name})
+Total Marks: ${examData.totalMarks} | Pass Marks: ${examData.passMarks}
+Students Appeared: ${examData.total}
+Pass Rate: ${examData.passPercent}%
+Class Average: ${examData.avg}
+Highest Score: ${examData.highest}
+Grade Distribution: ${JSON.stringify(examData.gradeDistribution)}
+
+Cover in plain conversational text (no JSON, no markdown headers):
+1. Overall how the class performed
+2. Whether the pass rate and average are healthy for this exam
+3. Any notable spread between highest score and average
+4. 2-3 concrete, actionable recommendations for the teacher
+
+Keep it under 200 words.`;
+
+  const messages = [{ role: 'user', content: prompt }];
+  return await callAI(messages, { maxTokens: 500 });
+};
+
 export default {
   callAI,
   admissionChatbot,
@@ -286,4 +310,5 @@ export default {
   generateMeetingSummary,
   classifyComplaint,
   analyzePerformance,
+  summarizeExamResults,
 };

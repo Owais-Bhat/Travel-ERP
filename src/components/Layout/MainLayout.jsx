@@ -1,9 +1,45 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { MdLogout } from 'react-icons/md';
 import TopBar from './TopBar';
 import Sidebar from './Sidebar';
 import CommandPalette from '../Common/CommandPalette';
 import { DepthField, PageTransition, AnimatePresence } from '../Common/Motion';
+import { setToken } from '../../lib/api';
+
+const IMPERSONATION_TOKEN_KEY = 'cybermilo_impersonation_origin_token';
+const IMPERSONATION_NAME_KEY = 'cybermilo_impersonation_origin_name';
+
+/** Banner shown while viewing the app as an impersonated tenant admin. */
+function ImpersonationBanner() {
+  const originName = sessionStorage.getItem(IMPERSONATION_NAME_KEY);
+  if (!sessionStorage.getItem(IMPERSONATION_TOKEN_KEY)) return null;
+
+  const exit = () => {
+    const originToken = sessionStorage.getItem(IMPERSONATION_TOKEN_KEY);
+    sessionStorage.removeItem(IMPERSONATION_TOKEN_KEY);
+    sessionStorage.removeItem(IMPERSONATION_NAME_KEY);
+    setToken(originToken);
+    window.location.href = '/admin/institutions';
+  };
+
+  return (
+    <div
+      className="flex items-center justify-between gap-3 px-4 py-2 text-sm font-semibold shrink-0"
+      style={{ background: 'var(--neu-amber)', color: '#1a1200' }}
+    >
+      <span>Viewing as {originName || 'a tenant admin'} — support session in progress.</span>
+      <button
+        type="button"
+        onClick={exit}
+        className="flex items-center gap-1.5 rounded-lg px-3 py-1 font-bold"
+        style={{ background: 'rgba(0,0,0,0.12)' }}
+      >
+        <MdLogout className="w-4 h-4" /> Exit impersonation
+      </button>
+    </div>
+  );
+}
 
 /**
  * App shell.
@@ -47,6 +83,7 @@ export default function MainLayout({ children }) {
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <div className="relative z-10 flex-1 flex flex-col overflow-hidden">
+        <ImpersonationBanner />
         <TopBar
           onMenuToggle={() => setSidebarOpen((open) => !open)}
           onSearchOpen={() => setPaletteOpen(true)}

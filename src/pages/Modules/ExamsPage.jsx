@@ -6,6 +6,7 @@ import Input from '../../components/Common/Input';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import api from '../../lib/api';
+import { summarizeExamResults } from '../../lib/openrouter';
 import { formatDate } from '../../utils/helpers';
 import {
   MdAdd,
@@ -14,6 +15,7 @@ import {
   MdBarChart,
   MdSchool,
   MdUpdate,
+  MdAutoAwesome,
 } from 'react-icons/md';
 
 // ─── constants ───────────────────────────────────────────────────────────────
@@ -99,6 +101,11 @@ export default function ExamsPage() {
   const [marksInput, setMarksInput] = useState({}); // { student_id: marks }
   const [savingResults, setSavingResults] = useState(false);
 
+  // AI summary
+  const [aiSummary, setAiSummary] = useState(null);
+  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
+  const [aiSummaryError, setAiSummaryError] = useState(null);
+
   // ── loaders ────────────────────────────────────────────────────────────────
 
   const loadExams = useCallback(async () => {
@@ -152,6 +159,8 @@ export default function ExamsPage() {
 
   useEffect(() => { loadExams(); }, [loadExams]);
   useEffect(() => {
+    setAiSummary(null);
+    setAiSummaryError(null);
     if (selectedExamId) {
       const exam = exams.find((e) => e.id === selectedExamId);
       setSelectedExam(exam || null);
@@ -180,8 +189,41 @@ export default function ExamsPage() {
     ).length;
     const avg = results.reduce((s, r) => s + (r.marks_obtained || 0), 0) / total;
     const highest = Math.max(...results.map((r) => r.marks_obtained || 0));
-    return { total, passed, passPercent: ((passed / total) * 100).toFixed(1), avg: avg.toFixed(1), highest };
+    const gradeDistribution = results.reduce((acc, r) => {
+      const grade = r.grade || 'N/A';
+      acc[grade] = (acc[grade] || 0) + 1;
+      return acc;
+    }, {});
+    return {
+      total, passed, passPercent: ((passed / total) * 100).toFixed(1), avg: avg.toFixed(1), highest,
+      gradeDistribution,
+    };
   })();
+
+  const handleGenerateSummary = async () => {
+    if (!selectedExam || !resultStats) return;
+    setAiSummaryLoading(true);
+    setAiSummaryError(null);
+    try {
+      const result = await summarizeExamResults({
+        title: selectedExam.title,
+        subject: selectedExam.subject,
+        class_name: selectedExam.class_name,
+        totalMarks: selectedExam.total_marks,
+        passMarks: selectedExam.pass_marks,
+        ...resultStats,
+      });
+      if (result.success) {
+        setAiSummary(result.data);
+      } else {
+        setAiSummaryError(result.error || 'AI summary failed');
+      }
+    } catch (err) {
+      setAiSummaryError(err.message || 'Failed to generate summary');
+    } finally {
+      setAiSummaryLoading(false);
+    }
+  };
 
   // ── create exam ────────────────────────────────────────────────────────────
 
@@ -458,6 +500,34 @@ export default function ExamsPage() {
                   <p className="text-2xl font-bold text-amber-400">{resultStats.highest}</p>
                 </GlassCard>
               </div>
+            )}
+
+            {/* AI Summary */}
+            {resultStats && (
+              <GlassCard className="p-5">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <h3 className="text-white font-semibold flex items-center gap-2">
+                    <MdAutoAwesome className="w-4 h-4 text-purple-400" /> AI Result Summary
+                  </h3>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    loading={aiSummaryLoading}
+                    onClick={handleGenerateSummary}
+                  >
+                    {aiSummary ? 'Regenerate' : 'Generate Summary'}
+                  </Button>
+                </div>
+                {aiSummaryError && <p className="text-red-300 text-sm">{aiSummaryError}</p>}
+                {!aiSummaryError && aiSummary && (
+                  <p className="text-white/80 text-sm whitespace-pre-wrap leading-relaxed">{aiSummary}</p>
+                )}
+                {!aiSummaryError && !aiSummary && !aiSummaryLoading && (
+                  <p className="text-white/40 text-sm">
+                    Generate a plain-language summary of this exam's results for reports or parent updates.
+                  </p>
+                )}
+              </GlassCard>
             )}
 
             {/* Results Table */}

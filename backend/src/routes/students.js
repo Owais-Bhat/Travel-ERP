@@ -150,6 +150,79 @@ router.get(
   })
 );
 
+/**
+ * A compact snapshot for the AI risk-check feature: attendance rate over
+ * the last 60 days, outstanding fee balance, and average exam performance.
+ * Computed server-side so the frontend never has to pull raw attendance/fee
+ * rows just to derive three numbers.
+ */
+router.get(
+  '/:id/risk-snapshot',
+  requirePermission('students.read'),
+  validate({ params: idParam }),
+  asyncHandler(async (req, res) => {
+    const student = await findOwnedOrFail(db, 'students', req.params.id, req.institutionId);
+
+    const [[attendanceRow]] = await db.execute(
+      `SELECT
+         COUNT(*) AS total_days,
+         SUM(status IN ('present', 'late')) AS present_days
+       FROM attendance
+      WHERE student_id = ? AND institution_id = ?
+        AND date >= (CURDATE() - INTERVAL 60 DAY)`,
+      [req.params.id, req.institutionId]
+    );
+
+    const [[feeRow]] = await db.execute(
+      `SELECT
+         COALESCE(SUM(total_amount), 0) AS total_billed,
+         COALESCE(SUM(paid_amount), 0) AS total_paid,
+         SUM(status IN ('pending', 'overdue')) AS unpaid_invoices
+       FROM fee_payments
+      WHERE student_id = ? AND institution_id = ?`,
+      [req.params.id, req.institutionId]
+    );
+
+    const [[examRow]] = await db.execute(
+      `SELECT ROUND(AVG(r.marks_obtained / e.total_marks * 100), 1) AS average_percent,
+              COUNT(*) AS exam_count
+         FROM exam_results r
+         JOIN exams e ON e.id = r.exam_id
+        WHERE r.student_id = ? AND e.institution_id = ? AND e.total_marks > 0`,
+      [req.params.id, req.institutionId]
+    );
+
+    const totalDays = Number(attendanceRow.total_days) || 0;
+    const presentDays = Number(attendanceRow.present_days) || 0;
+    const totalBilled = Number(feeRow.total_billed) || 0;
+    const totalPaid = Number(feeRow.total_paid) || 0;
+
+    res.json({
+      student: {
+        id: student.id,
+        name: `${student.first_name} ${student.last_name || ''}`.trim(),
+        class_name: student.class_name,
+        status: student.status,
+      },
+      attendance: {
+        windowDays: 60,
+        recordedDays: totalDays,
+        attendancePercent: totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : null,
+      },
+      fees: {
+        totalBilled,
+        totalPaid,
+        outstanding: Math.max(0, totalBilled - totalPaid),
+        unpaidInvoices: Number(feeRow.unpaid_invoices) || 0,
+      },
+      exams: {
+        averagePercent: examRow.average_percent === null ? null : Number(examRow.average_percent),
+        examCount: Number(examRow.exam_count) || 0,
+      },
+    });
+  })
+);
+
 router.post(
   '/',
   requirePermission('students.write'),

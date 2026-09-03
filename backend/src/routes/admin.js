@@ -10,6 +10,7 @@ import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../lib/db.js';
 import { requireSuperAdmin } from '../middleware/auth.js';
+import { signToken } from './auth.js';
 import { recordAuditEvent } from '../lib/audit.js';
 import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
@@ -598,6 +599,152 @@ router.get(
     );
 
     res.json({ events });
+  })
+);
+
+// ------------------------------------------------------------------
+// Global search — institutions, users, students across every tenant.
+// Scoped to super_admin only (router.use(requireSuperAdmin) above), so
+// this deliberately crosses tenant boundaries that every other route in
+// the app enforces.
+// ------------------------------------------------------------------
+router.get(
+  '/search',
+  validate({ query: z.object({ q: z.string().trim().min(2).max(100) }) }),
+  asyncHandler(async (req, res) => {
+    const term = `%${req.query.q}%`;
+
+    const [institutionRows] = await db.query(
+      `SELECT id, name, email, type FROM institutions
+        WHERE name LIKE ? OR email LIKE ?
+        LIMIT 10`,
+      [term, term]
+    );
+
+    const [userRows] = await db.query(
+      `SELECT p.id AS profile_id, p.first_name, p.last_name, p.role,
+              u.email, p.institution_id, i.name AS institution_name
+         FROM user_profiles p
+         JOIN users u ON u.id = p.user_id
+         LEFT JOIN institutions i ON i.id = p.institution_id
+        WHERE u.email LIKE ? OR p.first_name LIKE ? OR p.last_name LIKE ?
+        LIMIT 10`,
+      [term, term, term]
+    );
+
+    const [studentRows] = await db.query(
+      `SELECT s.id, s.first_name, s.last_name, s.admission_no, s.institution_id,
+              i.name AS institution_name
+         FROM students s
+         LEFT JOIN institutions i ON i.id = s.institution_id
+        WHERE s.first_name LIKE ? OR s.last_name LIKE ? OR s.admission_no LIKE ?
+        LIMIT 10`,
+      [term, term, term]
+    );
+
+    res.json({
+      institutions: institutionRows,
+      users: userRows,
+      students: studentRows,
+    });
+  })
+);
+
+// ------------------------------------------------------------------
+// System health — lightweight operational metrics. Resilient to a down
+// database (reports `database.connected: false` rather than 500ing) so
+// this endpoint stays useful precisely when things are going wrong.
+// ------------------------------------------------------------------
+router.get(
+  '/system-health',
+  asyncHandler(async (req, res) => {
+    const api = {
+      uptimeSeconds: Math.round(process.uptime()),
+      memoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
+      nodeVersion: process.version,
+    };
+
+    let database = { connected: false, activeConnections: null };
+    let activity24h = { totalEvents: 0, errorEvents: 0, errorRatePercent: 0 };
+
+    try {
+      const [[threadsRows], [errorCountRows], [totalCountRows]] = await Promise.all([
+        db.query("SHOW STATUS LIKE 'Threads_connected'"),
+        db.query(
+          `SELECT COUNT(*) AS count FROM activity_log
+            WHERE severity = 'error' AND created_at >= (NOW() - INTERVAL 24 HOUR)`
+        ),
+        db.query(
+          `SELECT COUNT(*) AS count FROM activity_log
+            WHERE created_at >= (NOW() - INTERVAL 24 HOUR)`
+        ),
+      ]);
+      database = { connected: true, activeConnections: Number(threadsRows[0]?.Value || 0) };
+      const errorCount = Number(errorCountRows[0]?.count || 0);
+      const totalCount = Number(totalCountRows[0]?.count || 0);
+      activity24h = {
+        totalEvents: totalCount,
+        errorEvents: errorCount,
+        errorRatePercent: totalCount > 0 ? Number(((errorCount / totalCount) * 100).toFixed(2)) : 0,
+      };
+    } catch {
+      // Database unreachable — still report the API-level metrics above.
+    }
+
+    res.json({ api, database, activity24h });
+  })
+);
+
+// ------------------------------------------------------------------
+// Impersonate — mint a token for a tenant's admin so a super admin can
+// see exactly what the tenant sees, for support. Every use is audited
+// against the impersonated institution with severity 'warning'.
+// ------------------------------------------------------------------
+router.post(
+  '/institutions/:id/impersonate',
+  validate({ params: z.object({ id: z.string().uuid() }) }),
+  asyncHandler(async (req, res) => {
+    const institution = await loadInstitutionOrFail(req.params.id);
+
+    const [profiles] = await db.execute(
+      `SELECT p.id AS profile_id, p.user_id, p.role, p.first_name, p.last_name, u.email
+         FROM user_profiles p
+         JOIN users u ON u.id = p.user_id
+        WHERE p.institution_id = ? AND p.is_active = 1
+          AND p.role IN ('institution_admin', 'principal')
+        ORDER BY (p.role = 'institution_admin') DESC, p.created_at ASC
+        LIMIT 1`,
+      [institution.id]
+    );
+
+    const target = profiles[0];
+    if (!target) {
+      throw ApiError.notFound('No active admin found for this institution to impersonate.');
+    }
+
+    const token = signToken({ userId: target.user_id, institutionId: institution.id, role: target.role });
+
+    await recordAuditEvent(req, {
+      institutionId: institution.id,
+      action: 'admin.impersonated_tenant',
+      description: `Super admin started an impersonation session as ${target.email}`,
+      entityType: 'user_profile',
+      entityId: target.profile_id,
+      severity: 'warning',
+      metadata: { impersonated_email: target.email, impersonated_role: target.role },
+    });
+
+    res.json({
+      token,
+      profile: {
+        id: target.profile_id,
+        email: target.email,
+        role: target.role,
+        first_name: target.first_name,
+        last_name: target.last_name,
+      },
+      institution: { id: institution.id, name: institution.name },
+    });
   })
 );
 

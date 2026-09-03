@@ -37,7 +37,7 @@ const password = z.string()
     message: 'Password must contain at least one letter and one number',
   });
 
-function signToken({ userId, institutionId, role }) {
+export function signToken({ userId, institutionId, role }) {
   return jwt.sign({ userId, institutionId, role }, env.jwtSecret, { expiresIn: env.jwtExpiresIn });
 }
 

@@ -10,6 +10,8 @@ import { useAppData } from '../../hooks/useAppData';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/helpers';
+import api from '../../lib/api';
+import { analyzeStudentRisk } from '../../lib/openrouter';
 import {
   MdAdd,
   MdEdit,
@@ -19,6 +21,7 @@ import {
   MdPeople,
   MdFilterList,
   MdWarning,
+  MdAutoAwesome,
 } from 'react-icons/md';
 
 const ITEMS_PER_PAGE = 20;
@@ -204,6 +207,13 @@ export default function StudentsPage() {
   const [editStudent, setEditStudent] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
+  // AI risk-check state
+  const [riskTarget, setRiskTarget] = useState(null);
+  const [riskLoading, setRiskLoading] = useState(false);
+  const [riskSnapshot, setRiskSnapshot] = useState(null);
+  const [riskResult, setRiskResult] = useState(null);
+  const [riskError, setRiskError] = useState(null);
+
   // Form state
   const [form, setForm] = useState(EMPTY_FORM);
   const [formErrors, setFormErrors] = useState({});
@@ -352,6 +362,44 @@ export default function StudentsPage() {
       notification.error(err.message || 'Failed to delete student');
     } finally {
       setDeleting(null);
+    }
+  };
+
+  const handleCheckRisk = async (student) => {
+    setRiskTarget(student);
+    setRiskLoading(true);
+    setRiskSnapshot(null);
+    setRiskResult(null);
+    setRiskError(null);
+    try {
+      const { data: snapshot } = await api.get(`/students/${student.id}/risk-snapshot`);
+      setRiskSnapshot(snapshot);
+
+      const studentData = {
+        attendance: snapshot.attendance.attendancePercent ?? 'unknown',
+        marksAverage: snapshot.exams.averagePercent ?? 'unknown',
+        feeStatus:
+          snapshot.fees.outstanding > 0
+            ? `₹${snapshot.fees.outstanding} outstanding across ${snapshot.fees.unpaidInvoices} invoice(s)`
+            : 'Fully paid',
+        behaviorIssues: 'Not tracked in system',
+        parentalEngagement: 'Not tracked in system',
+        previousPerformance:
+          snapshot.exams.examCount > 0
+            ? `${snapshot.exams.averagePercent}% average across ${snapshot.exams.examCount} exam(s)`
+            : 'No exam history recorded',
+      };
+
+      const result = await analyzeStudentRisk(studentData);
+      if (result.success) {
+        setRiskResult(result.data);
+      } else {
+        setRiskError(result.error || 'AI analysis failed');
+      }
+    } catch (err) {
+      setRiskError(err.message || 'Failed to load risk snapshot');
+    } finally {
+      setRiskLoading(false);
     }
   };
 
@@ -563,6 +611,13 @@ export default function StudentsPage() {
                         <td className="py-3 px-4">
                           <div className="flex items-center justify-center gap-1">
                             <button
+                              onClick={() => handleCheckRisk(student)}
+                              className="p-1.5 rounded-lg hover:bg-purple-500/20 text-purple-400 hover:text-purple-300 transition"
+                              title="AI risk check"
+                            >
+                              <MdAutoAwesome className="w-4 h-4" />
+                            </button>
+                            <button
                               onClick={() => handleOpenEdit(student)}
                               className="p-1.5 rounded-lg hover:bg-blue-500/20 text-blue-400 hover:text-blue-300 transition"
                               title="Edit student"
@@ -708,6 +763,67 @@ export default function StudentsPage() {
               This action cannot be undone. All data associated with this student will be permanently removed.
             </p>
           </div>
+        </Modal>
+
+        {/* AI Risk Check Modal */}
+        <Modal
+          open={!!riskTarget}
+          onClose={() => setRiskTarget(null)}
+          title={riskTarget ? `AI Risk Check — ${riskTarget.first_name} ${riskTarget.last_name || ''}` : 'AI Risk Check'}
+          maxWidth="max-w-2xl"
+          footer={
+            <Button variant="secondary" onClick={() => setRiskTarget(null)}>
+              Close
+            </Button>
+          }
+        >
+          {riskLoading && (
+            <div className="flex items-center justify-center gap-3 py-10 text-white/60">
+              <MdAutoAwesome className="w-5 h-5 animate-pulse text-purple-400" />
+              Analyzing attendance, fees and exam trends...
+            </div>
+          )}
+
+          {!riskLoading && riskError && (
+            <div className="text-center py-8 space-y-2">
+              <MdWarning className="w-8 h-8 text-red-400 mx-auto" />
+              <p className="text-red-300 text-sm">{riskError}</p>
+            </div>
+          )}
+
+          {!riskLoading && !riskError && riskSnapshot && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-lg bg-white/5 border border-white/10 p-3 text-center">
+                  <p className="text-white/40 text-xs mb-1">Attendance (60d)</p>
+                  <p className="text-white text-lg font-semibold">
+                    {riskSnapshot.attendance.attendancePercent ?? '—'}
+                    {riskSnapshot.attendance.attendancePercent !== null ? '%' : ''}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-white/5 border border-white/10 p-3 text-center">
+                  <p className="text-white/40 text-xs mb-1">Fees Outstanding</p>
+                  <p className="text-white text-lg font-semibold">₹{riskSnapshot.fees.outstanding}</p>
+                </div>
+                <div className="rounded-lg bg-white/5 border border-white/10 p-3 text-center">
+                  <p className="text-white/40 text-xs mb-1">Exam Average</p>
+                  <p className="text-white text-lg font-semibold">
+                    {riskSnapshot.exams.averagePercent ?? '—'}
+                    {riskSnapshot.exams.averagePercent !== null ? '%' : ''}
+                  </p>
+                </div>
+              </div>
+
+              {riskResult && (
+                <div className="rounded-lg bg-purple-500/10 border border-purple-500/20 p-4">
+                  <p className="text-purple-300 text-xs font-semibold mb-2 flex items-center gap-1.5">
+                    <MdAutoAwesome className="w-3.5 h-3.5" /> AI Assessment
+                  </p>
+                  <pre className="text-white/80 text-sm whitespace-pre-wrap font-sans">{riskResult}</pre>
+                </div>
+              )}
+            </div>
+          )}
         </Modal>
       </div>
     </MainLayout>
