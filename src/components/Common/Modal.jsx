@@ -24,6 +24,19 @@ export default function Modal({
   const previouslyFocused = useRef(null);
   const reduced = usePrefersReducedMotion();
 
+  // Callers pass `onClose` as an inline arrow function, so it's a new
+  // reference on every render of the parent — including the re-render that
+  // typing in the modal's own fields triggers. A ref keeps the keydown
+  // handler's `onClose` call current without making it an effect
+  // dependency: this effect (focus trap, body-scroll lock, initial focus)
+  // must run once when the modal opens, not on every keystroke. It used to
+  // depend on `[open, onClose]`, so a fast-typed character would re-run it
+  // mid-type — the cleanup's `previouslyFocused.current?.focus()` and the
+  // new run's requestAnimationFrame both yank focus back to the modal's
+  // first field, so only that field's first keystroke ever landed.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
   useEffect(() => {
     if (!open) return undefined;
 
@@ -33,7 +46,7 @@ export default function Modal({
 
     const onKeyDown = (event) => {
       if (event.key === 'Escape') {
-        onClose?.();
+        onCloseRef.current?.();
         return;
       }
       if (event.key !== 'Tab') return;
@@ -71,7 +84,7 @@ export default function Modal({
       document.body.style.overflow = overflow;
       previouslyFocused.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   // Portalled to <body> rather than rendered in place: the app shell wraps
   // routed content in ancestors with `perspective` and `will-change:
