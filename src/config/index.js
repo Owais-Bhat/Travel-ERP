@@ -152,10 +152,6 @@ export const MENU_ITEMS = {
         { key: 'audit', label: 'Audit Log', path: '/admin/audit' },
       ],
     },
-    { key: 'dashboard', iconName: 'MdDashboard', label: 'Tenant Preview', path: '/dashboard' },
-    { key: 'reports', iconName: 'MdAssessment', label: 'Reports', path: '/reports' },
-    { key: 'analytics', iconName: 'MdTrendingUp', label: 'AI Insights', path: '/performance-analysis' },
-    { key: 'settings', iconName: 'MdSettings', label: 'Platform Settings', path: '/settings' },
   ],
 
   institution_admin: TENANT_ADMIN_MENU,
