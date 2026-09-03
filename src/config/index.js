@@ -128,6 +128,7 @@ const TENANT_ADMIN_MENU = [
     iconName: 'MdLightbulb',
     label: 'AI Tools',
     subItems: [
+      { key: 'ai-tutor', label: 'AI Tutor', path: '/ai-tutor' },
       { key: 'career-path', label: 'Career Path', path: '/career-path' },
       { key: 'performance', label: 'Performance', path: '/performance-analysis' },
       { key: 'fee-recovery', label: 'Fee Recovery', path: '/fee-recovery' },
