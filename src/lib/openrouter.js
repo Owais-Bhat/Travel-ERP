@@ -87,7 +87,7 @@ Include:
 7. Resources needed`;
 
   const messages = [{ role: 'user', content: prompt }];
-  return await callAI(messages, { maxTokens: 2000 });
+  return await callAI(messages, { maxTokens: 700 });
 };
 
 // 3. AI Question Paper Generator
@@ -107,7 +107,7 @@ Include:
 Format as structured JSON.`;
 
   const messages = [{ role: 'user', content: prompt }];
-  return await callAI(messages, { maxTokens: 3000 });
+  return await callAI(messages, { maxTokens: 700 });
 };
 
 // 4. AI Student Risk Detection
@@ -155,7 +155,7 @@ Suggest:
 Provide JSON formatted recommendations.`;
 
   const messages = [{ role: 'user', content: prompt }];
-  return await callAI(messages, { maxTokens: 1500 });
+  return await callAI(messages, { maxTokens: 700 });
 };
 
 // 6. AI Timetable Generator
@@ -180,7 +180,7 @@ Requirements:
 Return as structured JSON with day-wise schedule.`;
 
   const messages = [{ role: 'user', content: prompt }];
-  return await callAI(messages, { maxTokens: 3000 });
+  return await callAI(messages, { maxTokens: 700 });
 };
 
 // 7. AI Career Path Recommendation
@@ -205,7 +205,7 @@ Provide:
 Format as actionable JSON.`;
 
   const messages = [{ role: 'user', content: prompt }];
-  return await callAI(messages, { maxTokens: 2000 });
+  return await callAI(messages, { maxTokens: 700 });
 };
 
 // 8. AI Parent Meeting Summary
@@ -229,7 +229,7 @@ Create a structured summary with:
 Format for email delivery.`;
 
   const messages = [{ role: 'user', content: prompt }];
-  return await callAI(messages, { maxTokens: 1500 });
+  return await callAI(messages, { maxTokens: 700 });
 };
 
 // 9. AI Complaint Classifier
@@ -249,7 +249,7 @@ Identify:
 Return as structured JSON.`;
 
   const messages = [{ role: 'user', content: prompt }];
-  return await callAI(messages, { maxTokens: 1000 });
+  return await callAI(messages, { maxTokens: 700 });
 };
 
 // 10. AI Performance Analysis
@@ -271,7 +271,7 @@ Provide:
 Format as detailed JSON.`;
 
   const messages = [{ role: 'user', content: prompt }];
-  return await callAI(messages, { maxTokens: 2000 });
+  return await callAI(messages, { maxTokens: 700 });
 };
 
 // 11. AI Exam Result Summary

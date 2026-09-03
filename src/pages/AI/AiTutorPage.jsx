@@ -104,9 +104,8 @@ export default function AiTutorPage() {
 
     const result = await callAI(apiMessages, {
       systemPrompt,
-      model: 'anthropic/claude-haiku',
       temperature: 0.7,
-      maxTokens: 1000,
+      maxTokens: 700,
     });
 
     if (result.success === false) {
