@@ -372,7 +372,7 @@ router.post(
 
     const assignments = ['subscription_status = ?'];
     const params = [status];
-    if (billingEmail !== undefined) {
+    if (billingEmail != null) {
       assignments.push('billing_email = ?');
       params.push(billingEmail.toLowerCase());
     }
