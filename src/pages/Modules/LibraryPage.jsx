@@ -23,6 +23,7 @@ export default function LibraryPage() {
   // ─── Catalog state ─────────────────────────────────────────────────
   const [books, setBooks] = useState([]);
   const [booksLoading, setBooksLoading] = useState(true);
+  const [booksError, setBooksError] = useState('');
   const [search, setSearch] = useState('');
   const [showBookModal, setShowBookModal] = useState(false);
   const [editingBook, setEditingBook] = useState(null);
@@ -44,11 +45,16 @@ export default function LibraryPage() {
   const loadBooks = async (query = search) => {
     if (!profile?.institution_id) return;
     setBooksLoading(true);
+    setBooksError('');
     try {
       const { data } = await api.get('/library/books', { params: query ? { search: query } : {} });
       setBooks(data || []);
     } catch (err) {
-      notification.error(err.response?.data?.error || 'Failed to load catalog');
+      // Distinguish "nothing here yet" from "we could not load it" — falling
+      // through to the empty state on a failed request hides real outages.
+      const message = err.response?.data?.error || 'Failed to load catalog';
+      setBooksError(message);
+      notification.error(message);
     } finally {
       setBooksLoading(false);
     }
@@ -221,6 +227,12 @@ export default function LibraryPage() {
 
             {booksLoading ? (
               <div className="text-center py-12 text-white/50">Loading catalog...</div>
+            ) : booksError ? (
+              <GlassCard className="p-10 text-center">
+                <p className="text-red-300 font-semibold mb-1">Could not load the catalog</p>
+                <p className="text-white/50 text-sm mb-4">{booksError}</p>
+                <Button variant="secondary" size="sm" onClick={() => loadBooks(search)}>Retry</Button>
+              </GlassCard>
             ) : books.length === 0 ? (
               <GlassCard className="p-10 text-center text-white/40">No books in the catalog yet.</GlassCard>
             ) : (

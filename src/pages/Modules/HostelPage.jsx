@@ -24,6 +24,7 @@ export default function HostelPage() {
   // ─── Hostels + rooms state ─────────────────────────────────────────
   const [hostels, setHostels] = useState([]);
   const [hostelsLoading, setHostelsLoading] = useState(true);
+  const [hostelsError, setHostelsError] = useState('');
   const [showHostelModal, setShowHostelModal] = useState(false);
   const [editingHostel, setEditingHostel] = useState(null);
   const [hostelForm, setHostelForm] = useState(EMPTY_HOSTEL);
@@ -51,11 +52,16 @@ export default function HostelPage() {
   const loadHostels = async () => {
     if (!profile?.institution_id) return;
     setHostelsLoading(true);
+    setHostelsError('');
     try {
       const { data } = await api.get('/hostel/hostels');
       setHostels(data || []);
     } catch (err) {
-      notification.error(err.response?.data?.error || 'Failed to load hostels');
+      // Distinguish "nothing here yet" from "we could not load it" — falling
+      // through to the empty state on a failed request hides real outages.
+      const message = err.response?.data?.error || 'Failed to load hostels';
+      setHostelsError(message);
+      notification.error(message);
     } finally {
       setHostelsLoading(false);
     }
@@ -284,6 +290,12 @@ export default function HostelPage() {
 
             {hostelsLoading ? (
               <div className="text-center py-12 text-white/50">Loading hostels...</div>
+            ) : hostelsError ? (
+              <GlassCard className="p-10 text-center">
+                <p className="text-red-300 font-semibold mb-1">Could not load hostels</p>
+                <p className="text-white/50 text-sm mb-4">{hostelsError}</p>
+                <Button variant="secondary" size="sm" onClick={loadHostels}>Retry</Button>
+              </GlassCard>
             ) : hostels.length === 0 ? (
               <GlassCard className="p-10 text-center text-white/40">No hostels configured yet.</GlassCard>
             ) : (
