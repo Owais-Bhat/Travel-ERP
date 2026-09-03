@@ -4,7 +4,7 @@ const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 export const callAI = async (messages, options = {}) => {
   const {
-    model = 'openai/gpt-4-turbo-preview',
+    model = 'openai/gpt-3.5-turbo',
     temperature = 0.7,
     maxTokens = 2000,
     systemPrompt = '',
