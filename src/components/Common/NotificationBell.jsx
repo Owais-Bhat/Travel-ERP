@@ -40,7 +40,7 @@ export default function NotificationBell() {
   const unreadCount = items.filter((item) => !item.read_at).length;
 
   const load = useCallback(async () => {
-    if (!profile?.id) return;
+    if (!profile?.institution_id) return;
     setLoading(true);
     try {
       const { notifications = [] } = await fetchNotifications();
@@ -50,13 +50,15 @@ export default function NotificationBell() {
     } finally {
       setLoading(false);
     }
-  }, [profile?.id]);
+  }, [profile?.institution_id]);
 
   useEffect(() => { load(); }, [load]);
 
   // Polling stands in for the Supabase realtime channel the app used to use.
+  // Super admins have no institution_id, and notifications are tenant-scoped,
+  // so there's nothing to poll for that role.
   useEffect(() => {
-    if (!profile?.id) return undefined;
+    if (!profile?.institution_id) return undefined;
     return pollNotifications((batch) => {
       setItems((previous) => {
         const known = new Set(previous.map((item) => item.id));

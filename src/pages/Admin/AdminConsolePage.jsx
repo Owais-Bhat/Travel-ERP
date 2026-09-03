@@ -503,7 +503,7 @@ export default function AdminConsolePage() {
       auditEvents.map(event => [
         event.created_at ? new Date(event.created_at).toLocaleString('en-IN') : '',
         formatAuditAction(event.action),
-        event.institutions?.name || '',
+        event.institution_name || '',
         event.severity || 'info',
         event.description || '',
       ])
@@ -1258,7 +1258,7 @@ export default function AdminConsolePage() {
                       </div>
                       <p className="text-sm text-slate-600 mb-1">{event.description || 'No description'}</p>
                       <p className="text-xs text-slate-500 mb-0">
-                        {event.institutions?.name || 'Unknown tenant'}
+                        {event.institution_name || 'Unknown tenant'}
                         {event.metadata?.actor_role ? ` / ${event.metadata.actor_role.replace('_', ' ')}` : ''}
                         {event.ip_address ? ` / ${event.ip_address}` : ''}
                       </p>
