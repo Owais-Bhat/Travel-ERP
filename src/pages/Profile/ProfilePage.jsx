@@ -50,6 +50,7 @@ export default function ProfilePage() {
   const savePassword = async (e) => {
     e.preventDefault();
     const errs = {};
+    if (!passwordForm.currentPassword) errs.currentPassword = 'Current password is required';
     if (!passwordForm.newPassword) errs.newPassword = 'New password is required';
     else if (passwordForm.newPassword.length < 8) errs.newPassword = 'Minimum 8 characters';
     else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(passwordForm.newPassword)) errs.newPassword = 'Must include uppercase, lowercase, and number';
@@ -142,6 +143,15 @@ export default function ProfilePage() {
         <GlassCard className="p-6">
           <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><MdLock /> Change Password</h2>
           <form onSubmit={savePassword} className="space-y-4">
+            <Input
+              label="Current Password"
+              name="currentPassword"
+              type="password"
+              value={passwordForm.currentPassword}
+              onChange={handlePasswordChange}
+              error={passwordErrors.currentPassword}
+              placeholder="Your existing password"
+            />
             <Input
               label="New Password"
               name="newPassword"

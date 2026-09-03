@@ -13,7 +13,7 @@ import { requireSuperAdmin } from '../middleware/auth.js';
 import { recordAuditEvent } from '../lib/audit.js';
 import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
-import { z, requiredEmail, optionalText, phone } from '../validation/common.js';
+import { z, requiredEmail, optionalText, phone, email } from '../validation/common.js';
 import { FEATURE_CATALOG, getBillingState, getPlanFeatureMap, getPlanLimits } from '../saas/features.js';
 
 const router = express.Router();
@@ -116,7 +116,7 @@ const createInstitutionSchema = z.object({
   country: optionalText(120),
   website: optionalText(255),
   subscription_plan: z.enum(PLANS).default('free'),
-  billingEmail: z.string().trim().email().max(255).optional(),
+  billingEmail: email,
   trialDays: z.coerce.number().int().min(0).max(365).default(14),
   modules: z.record(z.string(), z.boolean()).optional(),
   adminEmail: requiredEmail,
@@ -358,7 +358,7 @@ router.post(
 const subscriptionSchema = z.object({
   institutionId: z.string().uuid(),
   status: z.enum(SUBSCRIPTION_STATUSES),
-  billingEmail: z.string().trim().email().max(255).optional(),
+  billingEmail: email,
   trialEndsAt: z.string().nullable().optional(),
   currentPeriodEndsAt: z.string().nullable().optional(),
 });

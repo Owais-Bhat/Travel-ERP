@@ -25,6 +25,22 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       setToken(null);
     }
+
+    // Every page's catch block does `err.response?.data?.error || err.message`,
+    // which shows the generic "Invalid request body" summary — never the
+    // actual field that failed (`err.response?.data?.details`). Fold the
+    // first field-level message into `error.message` here once, so it shows
+    // up everywhere without touching every call site.
+    const data = error.response?.data;
+    const firstDetail = data?.details?.[0];
+    if (firstDetail?.message) {
+      error.message = firstDetail.path && firstDetail.path !== '(root)'
+        ? `${firstDetail.path}: ${firstDetail.message}`
+        : firstDetail.message;
+    } else if (data?.error) {
+      error.message = data.error;
+    }
+
     return Promise.reject(error);
   }
 );
