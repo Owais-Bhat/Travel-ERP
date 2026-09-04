@@ -15,7 +15,22 @@ export default function FeatureGate({ feature, children }) {
     return children;
   }
 
+  // `institution` loads asynchronously (AppDataContext fetches it after the
+  // profile resolves), so on a hard reload/direct link there's a window
+  // where it's still null even though the tenant genuinely has this
+  // feature. Only treat "no institution" as real once we've actually had a
+  // profile with an institution_id and still come up empty — otherwise this
+  // redirect fires on every fresh load before the fetch finishes, which
+  // reads as "the feature you enabled isn't there" when it's just not
+  // loaded yet.
   if (!institution) {
+    if (profile?.institution_id) {
+      return (
+        <div className="min-h-screen bg-[#F7F8FB] flex items-center justify-center">
+          <p className="text-slate-500">Loading...</p>
+        </div>
+      );
+    }
     return <Navigate to="/dashboard" replace />;
   }
 
