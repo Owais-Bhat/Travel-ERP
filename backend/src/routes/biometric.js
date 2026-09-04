@@ -6,6 +6,7 @@
  */
 import express from 'express';
 import crypto from 'node:crypto';
+import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../lib/db.js';
 import { requireAuthenticatedProfile } from '../middleware/auth.js';
@@ -16,8 +17,10 @@ import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
 import { findOwnedOrFail } from '../lib/query.js';
 import { z, optionalText, idParam } from '../validation/common.js';
+import { processPunchEvent, parseCsv, csvRowsToEvents } from '../lib/biometricProcessing.js';
 
 const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 router.use(requireAuthenticatedProfile);
 router.use(requireInstitution);
@@ -156,6 +159,39 @@ router.delete(
     await findOwnedOrFail(db, 'biometric_enrollments', req.params.id, req.institutionId);
     await db.execute('DELETE FROM biometric_enrollments WHERE id = ? AND institution_id = ?', [req.params.id, req.institutionId]);
     res.json({ success: true });
+  })
+);
+
+// -------------------------------------------------------- CSV import
+// A device's own software (Realtime eTimeTrackLite and equivalents on
+// other brands) exports attendance logs as CSV/Excel. This is the
+// reliable path when the device isn't (or can't be) configured to push
+// live — same matching/attendance logic as the webhook, just fed from a
+// file instead of a real-time POST.
+router.post(
+  '/devices/:id/import-csv',
+  requirePermission('attendance.write'),
+  validate({ params: idParam }),
+  upload.single('file'),
+  asyncHandler(async (req, res) => {
+    const device = await findOwnedOrFail(db, 'biometric_devices', req.params.id, req.institutionId);
+    if (!req.file) throw ApiError.badRequest('Attach a CSV file under the "file" field.');
+
+    const text = req.file.buffer.toString('utf8');
+    const rows = parseCsv(text);
+    const { events, error } = csvRowsToEvents(rows);
+    if (error) throw ApiError.badRequest(error);
+    if (events.length === 0) throw ApiError.badRequest('No usable rows found in this file.');
+
+    let matched = 0;
+    for (const event of events) {
+      const wasMatched = await processPunchEvent(db, req.institutionId, device.id, { ...event, source: 'csv_import' });
+      if (wasMatched) matched += 1;
+    }
+
+    await db.execute('UPDATE biometric_devices SET last_seen_at = NOW() WHERE id = ?', [device.id]);
+
+    res.status(201).json({ received: events.length, matched, unmatched: events.length - matched });
   })
 );
 

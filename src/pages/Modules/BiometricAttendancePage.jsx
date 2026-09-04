@@ -7,7 +7,7 @@ import Input from '../../components/Common/Input';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import api from '../../lib/api';
-import { MdAdd, MdDelete, MdClose, MdSearch, MdFingerprint, MdRefresh, MdContentCopy, MdCheck } from 'react-icons/md';
+import { MdAdd, MdDelete, MdClose, MdSearch, MdFingerprint, MdRefresh, MdContentCopy, MdCheck, MdUploadFile } from 'react-icons/md';
 
 const WEBHOOK_URL = 'https://erp-api.networkingexperts.in/api/biometric-webhook';
 
@@ -25,6 +25,7 @@ export default function BiometricAttendancePage() {
   const [deviceSaving, setDeviceSaving] = useState(false);
   const [revealedKey, setRevealedKey] = useState(null);
   const [copiedKeyFor, setCopiedKeyFor] = useState('');
+  const [importingFor, setImportingFor] = useState('');
 
   // ─── Enrollments ────────────────────────────────────────────────────
   const [enrollments, setEnrollments] = useState([]);
@@ -133,6 +134,25 @@ export default function BiometricAttendancePage() {
     }
   };
 
+  const handleImportCsv = async (device, file) => {
+    if (!file) return;
+    setImportingFor(device.id);
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      // Let axios set the multipart boundary itself — pinning
+      // Content-Type here would strip it and the upload would fail.
+      const { data } = await api.post(`/biometric/devices/${device.id}/import-csv`, formData);
+      notification.success(`Imported: ${data.matched} matched, ${data.unmatched} unenrolled ID(s) out of ${data.received} row(s).`);
+      loadDevices();
+      if (activeTab === 'punches') loadPunches();
+    } catch (err) {
+      notification.error(err.response?.data?.error || 'Failed to import file');
+    } finally {
+      setImportingFor('');
+    }
+  };
+
   const copyKey = async (device) => {
     await navigator.clipboard.writeText(device.api_key);
     setCopiedKeyFor(device.id);
@@ -203,13 +223,16 @@ export default function BiometricAttendancePage() {
       <div className="p-6 space-y-6">
         <h1 className="text-3xl font-bold text-white">Biometric Attendance</h1>
 
-        <GlassCard className="p-4">
-          <p className="text-white/60 text-sm mb-2">
-            Point your device's push-to-URL / middleware at this webhook. It authenticates with each device's own code + API key (below), not a login — any biometric device or agent software that can POST JSON can use it.
+        <GlassCard className="p-4 space-y-2">
+          <p className="text-white/60 text-sm mb-0">
+            <strong className="text-white/80">Live push:</strong> point your device's push-to-URL / middleware at this webhook. It authenticates with each device's own code + API key (below), not a login — any biometric device or agent software that can POST JSON can use it.
           </p>
           <code className="block bg-black/30 text-emerald-300 text-xs rounded-lg px-3 py-2 overflow-x-auto">
             POST {WEBHOOK_URL}
           </code>
+          <p className="text-white/60 text-sm mb-0 pt-1">
+            <strong className="text-white/80">No live push?</strong> Use "Import CSV/Excel export" on a device below — export attendance from your device's software (e.g. Realtime eTimeTrackLite), save as CSV, and upload it. Needs an ID column (Enroll No / User ID / PIN) and a date+time column.
+          </p>
         </GlassCard>
 
         <div className="flex gap-2 border-b border-white/10">
@@ -261,9 +284,20 @@ export default function BiometricAttendancePage() {
                         {copiedKeyFor === device.id ? <MdCheck className="w-4 h-4 text-emerald-400" /> : <MdContentCopy className="w-4 h-4" />}
                       </button>
                     </div>
-                    <button onClick={() => handleRotateKey(device)} className="text-xs text-amber-400/80 hover:text-amber-400 mt-2 inline-flex items-center gap-1">
-                      <MdRefresh className="w-3.5 h-3.5" /> Rotate key
-                    </button>
+                    <div className="flex items-center gap-4 mt-2">
+                      <button onClick={() => handleRotateKey(device)} className="text-xs text-amber-400/80 hover:text-amber-400 inline-flex items-center gap-1">
+                        <MdRefresh className="w-3.5 h-3.5" /> Rotate key
+                      </button>
+                      <label className={`text-xs text-blue-400/80 hover:text-blue-400 inline-flex items-center gap-1 cursor-pointer ${importingFor === device.id ? 'opacity-50 pointer-events-none' : ''}`}>
+                        <MdUploadFile className="w-3.5 h-3.5" /> {importingFor === device.id ? 'Importing...' : 'Import CSV/Excel export'}
+                        <input
+                          type="file"
+                          accept=".csv,.txt"
+                          className="hidden"
+                          onChange={e => { handleImportCsv(device, e.target.files[0]); e.target.value = ''; }}
+                        />
+                      </label>
+                    </div>
                   </GlassCard>
                 ))}
               </div>
