@@ -29,6 +29,10 @@ import CommunicationPage from './pages/Modules/CommunicationPage';
 import TransportPage from './pages/Modules/TransportPage';
 import LibraryPage from './pages/Modules/LibraryPage';
 import HostelPage from './pages/Modules/HostelPage';
+import InventoryPage from './pages/Modules/InventoryPage';
+import PayrollPage from './pages/Modules/PayrollPage';
+import VideoClassesPage from './pages/Modules/VideoClassesPage';
+import ReportsBuilderPage from './pages/Modules/ReportsBuilderPage';
 import AdmissionsPage from './pages/Modules/AdmissionsPage';
 
 // EIMS Modules
@@ -179,6 +183,38 @@ function App() {
                 element={
                   <GuardedPage path="/library" feature="library">
                     <LibraryPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/inventory"
+                element={
+                  <GuardedPage path="/inventory" feature="inventory">
+                    <InventoryPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/payroll"
+                element={
+                  <GuardedPage path="/payroll" feature="payroll">
+                    <PayrollPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/video-classes"
+                element={
+                  <GuardedPage path="/video-classes" feature="video_classes">
+                    <VideoClassesPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/reports-builder"
+                element={
+                  <GuardedPage path="/reports-builder" feature="reports_builder">
+                    <ReportsBuilderPage />
                   </GuardedPage>
                 }
               />

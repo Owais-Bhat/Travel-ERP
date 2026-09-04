@@ -14,7 +14,7 @@ import {
   MdDirectionsBus, MdChat, MdBarChart, MdAutoAwesome, MdSchool,
   MdGrade, MdNotifications, MdLogout, MdLightbulb, MdAdminPanelSettings,
   MdWorkspacePremium, MdCardGiftcard, MdHandshake, MdContactPhone,
-  MdFolderShared, MdAssessment, MdMenuBook,
+  MdFolderShared, MdAssessment, MdMenuBook, MdBadge,
 } from 'react-icons/md';
 
 const ICON_MAP = {
@@ -23,7 +23,7 @@ const ICON_MAP = {
   MdDirectionsBus, MdChat, MdBarChart, MdAutoAwesome, MdSchool,
   MdGrade, MdNotifications, MdLogout, MdLightbulb, MdAdminPanelSettings,
   MdWorkspacePremium, MdCardGiftcard, MdHandshake, MdContactPhone,
-  MdFolderShared, MdAssessment, MdMenuBook,
+  MdFolderShared, MdAssessment, MdMenuBook, MdBadge,
 };
 
 /**
@@ -43,6 +43,22 @@ export default function Sidebar({ isOpen, onClose }) {
   const role = profile?.role || user?.user_metadata?.role || 'student';
   const isSuperAdmin = role === 'super_admin';
   const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || 'User';
+
+  // Custom branding: a tenant's own logo/primary color, when they've set
+  // one in Settings > Branding. Super admin always sees the stock mark —
+  // branding is a tenant-level concept, not a platform one.
+  const brandLogoUrl = !isSuperAdmin ? institution?.logo_url : null;
+  const brandPrimaryColor = !isSuperAdmin ? institution?.settings?.branding?.primary_color : null;
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (brandPrimaryColor) {
+      root.style.setProperty('--neu-primary', brandPrimaryColor);
+    } else {
+      root.style.removeProperty('--neu-primary');
+    }
+    return () => root.style.removeProperty('--neu-primary');
+  }, [brandPrimaryColor]);
 
   const canShowPath = (path) => {
     if (!canAccessPath(role, path)) return false;
@@ -113,21 +129,31 @@ export default function Sidebar({ isOpen, onClose }) {
         {/* Brand */}
         <div className="flex items-center justify-between px-5 py-5 shrink-0">
           <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0"
-              style={{
-                background: isSuperAdmin
-                  ? 'linear-gradient(145deg, var(--neu-violet), var(--neu-primary))'
-                  : 'linear-gradient(145deg, var(--neu-teal), var(--neu-primary))',
-                boxShadow: 'var(--neu-e2)',
-              }}
-            >
-              <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5 text-white">
-                <path d="M12 3L2 8l10 5 10-5-10-5z" fill="currentColor" opacity="0.92" />
-                <path d="M2 16l10 5 10-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                <path d="M2 12l10 5 10-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </div>
+            {brandLogoUrl ? (
+              <img
+                src={brandLogoUrl}
+                alt="Institution logo"
+                className="w-10 h-10 rounded-2xl object-cover shrink-0"
+                style={{ boxShadow: 'var(--neu-e2)' }}
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+            ) : (
+              <div
+                className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0"
+                style={{
+                  background: isSuperAdmin
+                    ? 'linear-gradient(145deg, var(--neu-violet), var(--neu-primary))'
+                    : 'linear-gradient(145deg, var(--neu-teal), var(--neu-primary))',
+                  boxShadow: 'var(--neu-e2)',
+                }}
+              >
+                <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5 text-white">
+                  <path d="M12 3L2 8l10 5 10-5-10-5z" fill="currentColor" opacity="0.92" />
+                  <path d="M2 16l10 5 10-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  <path d="M2 12l10 5 10-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              </div>
+            )}
             <div>
               <span
                 className="text-base font-bold font-display tracking-tight"

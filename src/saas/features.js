@@ -28,17 +28,20 @@ export const FEATURE_CATALOG = [
   { key: 'leads', label: 'Lead CRM', category: 'core', route: '/leads', status: 'live' },
   { key: 'documents', label: 'Document Vault', category: 'core', route: '/documents', status: 'live' },
   { key: 'reports', label: 'Reports & Analytics', category: 'platform', route: '/reports', status: 'live' },
-  { key: 'reports_builder', label: 'Custom Report Builder', category: 'platform', route: null, status: 'planned' },
+  { key: 'reports_builder', label: 'Custom Report Builder', category: 'platform', route: '/reports-builder', status: 'live' },
   { key: 'payments', label: 'Payment Gateway', category: 'platform', route: null, status: 'planned' },
   { key: 'whatsapp_sms', label: 'WhatsApp & SMS', category: 'engagement', route: null, status: 'planned' },
   { key: 'hostel', label: 'Hostel', category: 'extensions', route: '/hostel', status: 'live' },
   { key: 'library', label: 'Library', category: 'extensions', route: '/library', status: 'live' },
-  { key: 'inventory', label: 'Inventory', category: 'extensions', route: null, status: 'planned' },
-  { key: 'payroll', label: 'HR & Payroll', category: 'extensions', route: null, status: 'planned' },
-  { key: 'video_classes', label: 'Video Classes', category: 'engagement', route: null, status: 'planned' },
+  { key: 'inventory', label: 'Inventory', category: 'extensions', route: '/inventory', status: 'live' },
+  { key: 'payroll', label: 'HR & Payroll', category: 'extensions', route: '/payroll', status: 'live' },
+  { key: 'video_classes', label: 'Video Classes', category: 'engagement', route: '/video-classes', status: 'live' },
+  // Duplicate of `certifications` above (issuing a certificate to a
+  // student is the same workflow) — kept as a planned alias, not a
+  // separate module.
   { key: 'certificates', label: 'Certificates', category: 'academics', route: null, status: 'planned' },
   { key: 'api_access', label: 'API Access', category: 'platform', route: null, status: 'planned' },
-  { key: 'custom_branding', label: 'Custom Branding', category: 'platform', route: null, status: 'planned' },
+  { key: 'custom_branding', label: 'Custom Branding', category: 'platform', route: null, status: 'live' },
 ];
 
 export const PLAN_DEFINITIONS = {
@@ -57,13 +60,13 @@ export const PLAN_DEFINITIONS = {
   growth: {
     label: 'Growth',
     monthlyPrice: 4999,
-    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'ai_tutor', 'performance_analysis', 'documents', 'leads', 'programs', 'certifications', 'reports'],
+    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'video_classes', 'custom_branding', 'ai_tutor', 'performance_analysis', 'documents', 'leads', 'programs', 'certifications', 'reports', 'reports_builder'],
     limits: { users: 100, students: 2000, aiCredits: 1000 },
   },
   pro: {
     label: 'Pro',
     monthlyPrice: 9999,
-    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments', 'documents', 'leads', 'programs', 'certifications', 'reports', 'scholarships', 'referrals'],
+    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'payroll', 'video_classes', 'custom_branding', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments', 'documents', 'leads', 'programs', 'certifications', 'reports', 'scholarships', 'referrals'],
     limits: { users: 300, students: 10000, aiCredits: 5000 },
   },
   enterprise: {

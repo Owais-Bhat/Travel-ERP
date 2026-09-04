@@ -121,10 +121,28 @@ const TENANT_ADMIN_MENU = [
       { key: 'transport', label: 'Transport', path: '/transport' },
       { key: 'hostel', label: 'Hostel', path: '/hostel' },
       { key: 'library', label: 'Library', path: '/library' },
+      { key: 'inventory', label: 'Inventory', path: '/inventory' },
+      { key: 'video-classes', label: 'Video Classes', path: '/video-classes' },
       { key: 'communication', label: 'Communication', path: '/communication' },
     ],
   },
-  { key: 'reports', iconName: 'MdAssessment', label: 'Reports', path: '/reports' },
+  {
+    key: 'hr',
+    iconName: 'MdBadge',
+    label: 'HR',
+    subItems: [
+      { key: 'payroll', label: 'Payroll', path: '/payroll' },
+    ],
+  },
+  {
+    key: 'reports',
+    iconName: 'MdAssessment',
+    label: 'Reports',
+    subItems: [
+      { key: 'reports', label: 'Reports & Analytics', path: '/reports' },
+      { key: 'reports-builder', label: 'Custom Report Builder', path: '/reports-builder' },
+    ],
+  },
   {
     key: 'ai',
     iconName: 'MdLightbulb',

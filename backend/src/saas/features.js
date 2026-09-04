@@ -19,24 +19,27 @@ export const FEATURE_CATALOG = [
   { key: 'leads', label: 'Lead CRM', status: 'live' },
   { key: 'documents', label: 'Document Vault', status: 'live' },
   { key: 'reports', label: 'Reports & Analytics', status: 'live' },
-  { key: 'reports_builder', label: 'Custom Report Builder', status: 'planned' },
+  { key: 'reports_builder', label: 'Custom Report Builder', status: 'live' },
   { key: 'payments', label: 'Payment Gateway', status: 'planned' },
   { key: 'whatsapp_sms', label: 'WhatsApp & SMS', status: 'planned' },
   { key: 'hostel', label: 'Hostel', status: 'live' },
   { key: 'library', label: 'Library', status: 'live' },
-  { key: 'inventory', label: 'Inventory', status: 'planned' },
-  { key: 'payroll', label: 'HR & Payroll', status: 'planned' },
-  { key: 'video_classes', label: 'Video Classes', status: 'planned' },
+  { key: 'inventory', label: 'Inventory', status: 'live' },
+  { key: 'payroll', label: 'HR & Payroll', status: 'live' },
+  { key: 'video_classes', label: 'Video Classes', status: 'live' },
+  // Duplicate of `certifications` above (same concept: issue a certificate
+  // to a student) — kept as a planned alias so old tenant settings that
+  // reference it don't break, but it's not a separate module to build.
   { key: 'certificates', label: 'Certificates', status: 'planned' },
   { key: 'api_access', label: 'API Access', status: 'planned' },
-  { key: 'custom_branding', label: 'Custom Branding', status: 'planned' },
+  { key: 'custom_branding', label: 'Custom Branding', status: 'live' },
 ];
 
 export const PLAN_DEFINITIONS = {
   free: ['dashboard', 'students', 'attendance'],
   starter: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'exams', 'communication', 'documents', 'leads'],
-  growth: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'ai_tutor', 'performance_analysis', 'documents', 'leads', 'programs', 'certifications', 'reports'],
-  pro: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments', 'documents', 'leads', 'programs', 'certifications', 'reports', 'scholarships', 'referrals'],
+  growth: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'video_classes', 'custom_branding', 'ai_tutor', 'performance_analysis', 'documents', 'leads', 'programs', 'certifications', 'reports', 'reports_builder'],
+  pro: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'payroll', 'video_classes', 'custom_branding', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments', 'documents', 'leads', 'programs', 'certifications', 'reports', 'scholarships', 'referrals'],
   enterprise: FEATURE_CATALOG.map(feature => feature.key),
 };
 

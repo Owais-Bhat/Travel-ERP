@@ -10,11 +10,12 @@ import { fetchInstitutionUsers, inviteInstitutionUser, updateInstitutionUser } f
 import { fetchRoleFeatures, saveRoleFeatures } from '../../lib/institutionsApi';
 import {
   MdBusiness, MdPeople, MdSettings, MdAdd, MdDelete, MdEmail, MdShield,
-  MdContentCopy, MdCheck, MdWarning,
+  MdContentCopy, MdCheck, MdWarning, MdPalette,
 } from 'react-icons/md';
 
 const TABS = [
   { key: 'institution', label: 'Institution', icon: MdBusiness },
+  { key: 'branding', label: 'Branding', icon: MdPalette },
   { key: 'users', label: 'Users & Roles', icon: MdPeople },
   { key: 'roleAccess', label: 'Role Access', icon: MdShield },
   { key: 'modules', label: 'Modules', icon: MdSettings },
@@ -45,6 +46,8 @@ export default function SettingsPage() {
   const [loadingUsers, setLoadingUsers] = useState(false);
 
   const [institution, setInstitution] = useState({ name: '', type: '', address: '', phone: '', email: '' });
+  const [branding, setBranding] = useState({ logo_url: '', primary_color: '' });
+  const [savingBranding, setSavingBranding] = useState(false);
   const [users, setUsers] = useState([]);
   const [modules, setModules] = useState({});
   const [plan, setPlan] = useState('free');
@@ -91,6 +94,10 @@ export default function SettingsPage() {
         phone: data.phone || '',
         email: data.email || '',
         settings: data.settings || {},
+      });
+      setBranding({
+        logo_url: data.logo_url || '',
+        primary_color: data.settings?.branding?.primary_color || '',
       });
       // `enabled_modules` is the resolved plan + override map from the
       // server; module availability is set by the plan, not by the tenant.
@@ -177,6 +184,21 @@ export default function SettingsPage() {
       notification.error('Failed to save: ' + (err.response?.data?.error || err.message));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveBranding = async () => {
+    setSavingBranding(true);
+    try {
+      await api.put('/institutions/profile', { logo_url: branding.logo_url });
+      await api.put('/institutions/settings', {
+        settings: { branding: { primary_color: branding.primary_color } },
+      });
+      notification.success('Branding saved — reload to see it everywhere.');
+    } catch (err) {
+      notification.error('Failed to save: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setSavingBranding(false);
     }
   };
 
@@ -299,6 +321,50 @@ export default function SettingsPage() {
               </div>
             </div>
             <Button variant="primary" onClick={saveInstitution} loading={saving}>Save Changes</Button>
+          </GlassCard>
+        )}
+
+        {/* Branding */}
+        {activeTab === 'branding' && (
+          <GlassCard className="p-6 space-y-5">
+            <div>
+              <h2 className="text-lg font-bold text-white">Custom Branding</h2>
+              <p className="text-white/50 text-sm mb-0">
+                Your logo replaces the CyberMilo mark in your sidebar, and your primary color tints buttons and highlights across the app.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input
+                label="Logo URL"
+                placeholder="https://your-school.com/logo.png"
+                value={branding.logo_url}
+                onChange={e => setBranding(b => ({ ...b, logo_url: e.target.value }))}
+              />
+              <div>
+                <label className="block text-white/60 text-sm mb-1">Primary Color</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={branding.primary_color || '#0066FF'}
+                    onChange={e => setBranding(b => ({ ...b, primary_color: e.target.value }))}
+                    className="w-12 h-10 rounded-lg border border-white/20 bg-transparent cursor-pointer"
+                  />
+                  <input
+                    value={branding.primary_color}
+                    onChange={e => setBranding(b => ({ ...b, primary_color: e.target.value }))}
+                    placeholder="#0066FF"
+                    className="flex-1 bg-white/5 border border-white/20 text-white rounded-lg px-4 py-2.5 focus:outline-none focus:border-neon-cyan/50"
+                  />
+                </div>
+              </div>
+            </div>
+            {branding.logo_url && (
+              <div>
+                <p className="text-white/40 text-xs mb-2">Preview</p>
+                <img src={branding.logo_url} alt="Logo preview" className="h-12 rounded bg-white/5 p-1" onError={e => { e.target.style.display = 'none'; }} />
+              </div>
+            )}
+            <Button variant="primary" onClick={saveBranding} loading={savingBranding}>Save Branding</Button>
           </GlassCard>
         )}
 

@@ -38,6 +38,10 @@ import lmsRouter from './routes/lms.js';
 import transportRouter from './routes/transport.js';
 import libraryRouter from './routes/library.js';
 import hostelRouter from './routes/hostel.js';
+import inventoryRouter from './routes/inventory.js';
+import payrollRouter from './routes/payroll.js';
+import videoClassesRouter from './routes/videoClasses.js';
+import reportsBuilderRouter from './routes/reportsBuilder.js';
 
 const app = express();
 
@@ -142,6 +146,10 @@ app.use('/api/lms', lmsRouter);
 app.use('/api/transport', transportRouter);
 app.use('/api/library', libraryRouter);
 app.use('/api/hostel', hostelRouter);
+app.use('/api/inventory', inventoryRouter);
+app.use('/api/payroll', payrollRouter);
+app.use('/api/video-classes', videoClassesRouter);
+app.use('/api/reports-builder', reportsBuilderRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
