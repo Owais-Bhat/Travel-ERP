@@ -34,13 +34,17 @@ export const FEATURE_CATALOG = [
   { key: 'api_access', label: 'API Access', status: 'planned' },
   { key: 'custom_branding', label: 'Custom Branding', status: 'live' },
   { key: 'biometric_attendance', label: 'Biometric Attendance', status: 'live' },
+  { key: 'timetable', label: 'Timetable Builder', status: 'live' },
+  { key: 'homework', label: 'Homework & Assignments', status: 'live' },
+  { key: 'calendar', label: 'School Calendar', status: 'live' },
+  { key: 'id_cards', label: 'ID Card Generator', status: 'live' },
 ];
 
 export const PLAN_DEFINITIONS = {
   free: ['dashboard', 'students', 'attendance'],
   starter: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'exams', 'communication', 'documents', 'leads'],
-  growth: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'video_classes', 'custom_branding', 'biometric_attendance', 'ai_tutor', 'performance_analysis', 'documents', 'leads', 'programs', 'certifications', 'reports', 'reports_builder'],
-  pro: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'payroll', 'video_classes', 'custom_branding', 'biometric_attendance', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments', 'documents', 'leads', 'programs', 'certifications', 'reports', 'scholarships', 'referrals'],
+  growth: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'video_classes', 'custom_branding', 'biometric_attendance', 'timetable', 'homework', 'calendar', 'id_cards', 'ai_tutor', 'performance_analysis', 'documents', 'leads', 'programs', 'certifications', 'reports', 'reports_builder'],
+  pro: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'payroll', 'video_classes', 'custom_branding', 'biometric_attendance', 'timetable', 'homework', 'calendar', 'id_cards', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments', 'documents', 'leads', 'programs', 'certifications', 'reports', 'scholarships', 'referrals'],
   enterprise: FEATURE_CATALOG.map(feature => feature.key),
 };
 

@@ -34,6 +34,10 @@ import PayrollPage from './pages/Modules/PayrollPage';
 import VideoClassesPage from './pages/Modules/VideoClassesPage';
 import ReportsBuilderPage from './pages/Modules/ReportsBuilderPage';
 import BiometricAttendancePage from './pages/Modules/BiometricAttendancePage';
+import TimetablePage from './pages/Modules/TimetablePage';
+import HomeworkPage from './pages/Modules/HomeworkPage';
+import CalendarPage from './pages/Modules/CalendarPage';
+import IdCardsPage from './pages/Modules/IdCardsPage';
 import AdmissionsPage from './pages/Modules/AdmissionsPage';
 
 // EIMS Modules
@@ -224,6 +228,38 @@ function App() {
                 element={
                   <GuardedPage path="/biometric-attendance" feature="biometric_attendance">
                     <BiometricAttendancePage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/timetable"
+                element={
+                  <GuardedPage path="/timetable" feature="timetable">
+                    <TimetablePage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/homework"
+                element={
+                  <GuardedPage path="/homework" feature="homework">
+                    <HomeworkPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/calendar"
+                element={
+                  <GuardedPage path="/calendar" feature="calendar">
+                    <CalendarPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/id-cards"
+                element={
+                  <GuardedPage path="/id-cards" feature="id_cards">
+                    <IdCardsPage />
                   </GuardedPage>
                 }
               />

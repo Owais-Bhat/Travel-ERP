@@ -44,6 +44,9 @@ import videoClassesRouter from './routes/videoClasses.js';
 import reportsBuilderRouter from './routes/reportsBuilder.js';
 import biometricRouter from './routes/biometric.js';
 import biometricWebhookRouter from './routes/biometricWebhook.js';
+import timetableRouter from './routes/timetable.js';
+import homeworkRouter from './routes/homework.js';
+import calendarRouter from './routes/calendar.js';
 
 const app = express();
 
@@ -155,6 +158,9 @@ app.use('/api/reports-builder', reportsBuilderRouter);
 app.use('/api/biometric', biometricRouter);
 // Public — a scanner authenticates with its own device_code + api_key, not a user JWT.
 app.use('/api/biometric-webhook', biometricWebhookRouter);
+app.use('/api/timetable', timetableRouter);
+app.use('/api/homework', homeworkRouter);
+app.use('/api/calendar', calendarRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

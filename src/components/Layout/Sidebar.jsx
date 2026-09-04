@@ -14,7 +14,7 @@ import {
   MdDirectionsBus, MdChat, MdBarChart, MdAutoAwesome, MdSchool,
   MdGrade, MdNotifications, MdLogout, MdLightbulb, MdAdminPanelSettings,
   MdWorkspacePremium, MdCardGiftcard, MdHandshake, MdContactPhone,
-  MdFolderShared, MdAssessment, MdMenuBook, MdBadge,
+  MdFolderShared, MdAssessment, MdMenuBook, MdBadge, MdCalendarMonth,
 } from 'react-icons/md';
 
 const ICON_MAP = {
@@ -23,7 +23,7 @@ const ICON_MAP = {
   MdDirectionsBus, MdChat, MdBarChart, MdAutoAwesome, MdSchool,
   MdGrade, MdNotifications, MdLogout, MdLightbulb, MdAdminPanelSettings,
   MdWorkspacePremium, MdCardGiftcard, MdHandshake, MdContactPhone,
-  MdFolderShared, MdAssessment, MdMenuBook, MdBadge,
+  MdFolderShared, MdAssessment, MdMenuBook, MdBadge, MdCalendarMonth,
 };
 
 /**

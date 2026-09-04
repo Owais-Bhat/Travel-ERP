@@ -43,6 +43,10 @@ export const FEATURE_CATALOG = [
   { key: 'api_access', label: 'API Access', category: 'platform', route: null, status: 'planned' },
   { key: 'custom_branding', label: 'Custom Branding', category: 'platform', route: null, status: 'live' },
   { key: 'biometric_attendance', label: 'Biometric Attendance', category: 'extensions', route: '/biometric-attendance', status: 'live' },
+  { key: 'timetable', label: 'Timetable Builder', category: 'academics', route: '/timetable', status: 'live' },
+  { key: 'homework', label: 'Homework & Assignments', category: 'academics', route: '/homework', status: 'live' },
+  { key: 'calendar', label: 'School Calendar', category: 'core', route: '/calendar', status: 'live' },
+  { key: 'id_cards', label: 'ID Card Generator', category: 'extensions', route: '/id-cards', status: 'live' },
 ];
 
 export const PLAN_DEFINITIONS = {
@@ -61,13 +65,13 @@ export const PLAN_DEFINITIONS = {
   growth: {
     label: 'Growth',
     monthlyPrice: 4999,
-    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'video_classes', 'custom_branding', 'biometric_attendance', 'ai_tutor', 'performance_analysis', 'documents', 'leads', 'programs', 'certifications', 'reports', 'reports_builder'],
+    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'video_classes', 'custom_branding', 'biometric_attendance', 'timetable', 'homework', 'calendar', 'id_cards', 'ai_tutor', 'performance_analysis', 'documents', 'leads', 'programs', 'certifications', 'reports', 'reports_builder'],
     limits: { users: 100, students: 2000, aiCredits: 1000 },
   },
   pro: {
     label: 'Pro',
     monthlyPrice: 9999,
-    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'payroll', 'video_classes', 'custom_branding', 'biometric_attendance', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments', 'documents', 'leads', 'programs', 'certifications', 'reports', 'scholarships', 'referrals'],
+    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'payroll', 'video_classes', 'custom_branding', 'biometric_attendance', 'timetable', 'homework', 'calendar', 'id_cards', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments', 'documents', 'leads', 'programs', 'certifications', 'reports', 'scholarships', 'referrals'],
     limits: { users: 300, students: 10000, aiCredits: 5000 },
   },
   enterprise: {
