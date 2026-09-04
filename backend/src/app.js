@@ -47,6 +47,13 @@ import biometricWebhookRouter from './routes/biometricWebhook.js';
 import timetableRouter from './routes/timetable.js';
 import homeworkRouter from './routes/homework.js';
 import calendarRouter from './routes/calendar.js';
+import leaveRouter from './routes/leave.js';
+import disciplineRouter from './routes/discipline.js';
+import visitorsRouter from './routes/visitors.js';
+import facilitiesRouter from './routes/facilities.js';
+import alumniRouter from './routes/alumni.js';
+import reportCardsRouter from './routes/reportCards.js';
+import admissionsPublicRouter from './routes/admissionsPublic.js';
 
 const app = express();
 
@@ -161,6 +168,13 @@ app.use('/api/biometric-webhook', biometricWebhookRouter);
 app.use('/api/timetable', timetableRouter);
 app.use('/api/homework', homeworkRouter);
 app.use('/api/calendar', calendarRouter);
+app.use('/api/leave', leaveRouter);
+app.use('/api/discipline', disciplineRouter);
+app.use('/api/visitors', visitorsRouter);
+app.use('/api/facilities', facilitiesRouter);
+app.use('/api/alumni', alumniRouter);
+app.use('/api/report-cards', reportCardsRouter);
+app.use('/api/admissions-public', admissionsPublicRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

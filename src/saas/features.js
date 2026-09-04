@@ -47,6 +47,15 @@ export const FEATURE_CATALOG = [
   { key: 'homework', label: 'Homework & Assignments', category: 'academics', route: '/homework', status: 'live' },
   { key: 'calendar', label: 'School Calendar', category: 'core', route: '/calendar', status: 'live' },
   { key: 'id_cards', label: 'ID Card Generator', category: 'extensions', route: '/id-cards', status: 'live' },
+  { key: 'staff_leave', label: 'Staff Leave Management', category: 'extensions', route: '/leave', status: 'live' },
+  // No dedicated route — it's a public form (/apply/:institutionId) linked
+  // from the existing Admissions page rather than a separate guarded page.
+  { key: 'admission_form', label: 'Public Admission Form', category: 'core', route: null, status: 'live' },
+  { key: 'discipline', label: 'Discipline Tracking', category: 'academics', route: '/discipline', status: 'live' },
+  { key: 'report_cards', label: 'Report Card Generator', category: 'academics', route: '/report-cards', status: 'live' },
+  { key: 'visitor_management', label: 'Visitor & Gate Pass', category: 'extensions', route: '/visitors', status: 'live' },
+  { key: 'facility_booking', label: 'Facility Booking', category: 'extensions', route: '/facilities', status: 'live' },
+  { key: 'alumni', label: 'Alumni Network', category: 'engagement', route: '/alumni', status: 'live' },
 ];
 
 export const PLAN_DEFINITIONS = {
@@ -65,13 +74,13 @@ export const PLAN_DEFINITIONS = {
   growth: {
     label: 'Growth',
     monthlyPrice: 4999,
-    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'video_classes', 'custom_branding', 'biometric_attendance', 'timetable', 'homework', 'calendar', 'id_cards', 'ai_tutor', 'performance_analysis', 'documents', 'leads', 'programs', 'certifications', 'reports', 'reports_builder'],
+    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'video_classes', 'custom_branding', 'biometric_attendance', 'timetable', 'homework', 'calendar', 'id_cards', 'ai_tutor', 'performance_analysis', 'documents', 'leads', 'programs', 'certifications', 'reports', 'reports_builder', 'staff_leave', 'admission_form', 'discipline', 'report_cards', 'visitor_management', 'facility_booking', 'alumni'],
     limits: { users: 100, students: 2000, aiCredits: 1000 },
   },
   pro: {
     label: 'Pro',
     monthlyPrice: 9999,
-    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'payroll', 'video_classes', 'custom_branding', 'biometric_attendance', 'timetable', 'homework', 'calendar', 'id_cards', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments', 'documents', 'leads', 'programs', 'certifications', 'reports', 'scholarships', 'referrals'],
+    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'payroll', 'video_classes', 'custom_branding', 'biometric_attendance', 'timetable', 'homework', 'calendar', 'id_cards', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments', 'documents', 'leads', 'programs', 'certifications', 'reports', 'scholarships', 'referrals', 'staff_leave', 'admission_form', 'discipline', 'report_cards', 'visitor_management', 'facility_booking', 'alumni'],
     limits: { users: 300, students: 10000, aiCredits: 5000 },
   },
   enterprise: {

@@ -39,6 +39,13 @@ import HomeworkPage from './pages/Modules/HomeworkPage';
 import CalendarPage from './pages/Modules/CalendarPage';
 import IdCardsPage from './pages/Modules/IdCardsPage';
 import AdmissionsPage from './pages/Modules/AdmissionsPage';
+import LeaveManagementPage from './pages/Modules/LeaveManagementPage';
+import DisciplinePage from './pages/Modules/DisciplinePage';
+import ReportCardsPage from './pages/Modules/ReportCardsPage';
+import VisitorsPage from './pages/Modules/VisitorsPage';
+import FacilitiesPage from './pages/Modules/FacilitiesPage';
+import AlumniPage from './pages/Modules/AlumniPage';
+import PublicAdmissionFormPage from './pages/Public/PublicAdmissionFormPage';
 
 // EIMS Modules
 import ProgramsPage from './pages/Modules/ProgramsPage';
@@ -91,6 +98,7 @@ function App() {
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
+              <Route path="/apply/:institutionId" element={<PublicAdmissionFormPage />} />
 
               {/* Protected routes */}
               <Route
@@ -268,6 +276,54 @@ function App() {
                 element={
                   <GuardedPage path="/admissions" feature="admissions">
                     <AdmissionsPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/leave"
+                element={
+                  <GuardedPage path="/leave" feature="staff_leave">
+                    <LeaveManagementPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/discipline"
+                element={
+                  <GuardedPage path="/discipline" feature="discipline">
+                    <DisciplinePage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/report-cards"
+                element={
+                  <GuardedPage path="/report-cards" feature="report_cards">
+                    <ReportCardsPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/visitors"
+                element={
+                  <GuardedPage path="/visitors" feature="visitor_management">
+                    <VisitorsPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/facilities"
+                element={
+                  <GuardedPage path="/facilities" feature="facility_booking">
+                    <FacilitiesPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/alumni"
+                element={
+                  <GuardedPage path="/alumni" feature="alumni">
+                    <AlumniPage />
                   </GuardedPage>
                 }
               />

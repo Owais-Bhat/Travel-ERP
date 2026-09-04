@@ -326,9 +326,21 @@ export default function AdmissionsPage() {
             <h1 className="text-3xl font-bold text-white">Admissions</h1>
             <p className="text-white/50 text-sm mt-1">Manage student applications and enrollments</p>
           </div>
-          <Button variant="primary" onClick={() => { setForm(EMPTY_FORM); setFormErrors({}); setShowAddModal(true); }}>
-            <MdAdd className="inline mr-1.5 w-4 h-4" /> New Application
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const link = `${window.location.origin}/apply/${profile?.institution_id}`;
+                navigator.clipboard?.writeText(link);
+                notification.success('Public application link copied!');
+              }}
+            >
+              Copy Public Application Link
+            </Button>
+            <Button variant="primary" onClick={() => { setForm(EMPTY_FORM); setFormErrors({}); setShowAddModal(true); }}>
+              <MdAdd className="inline mr-1.5 w-4 h-4" /> New Application
+            </Button>
+          </div>
         </div>
 
         {pageError && (
