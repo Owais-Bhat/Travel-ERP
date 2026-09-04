@@ -123,6 +123,7 @@ const TENANT_ADMIN_MENU = [
       { key: 'library', label: 'Library', path: '/library' },
       { key: 'inventory', label: 'Inventory', path: '/inventory' },
       { key: 'video-classes', label: 'Video Classes', path: '/video-classes' },
+      { key: 'biometric-attendance', label: 'Biometric Attendance', path: '/biometric-attendance' },
       { key: 'communication', label: 'Communication', path: '/communication' },
     ],
   },

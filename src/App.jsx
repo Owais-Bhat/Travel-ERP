@@ -33,6 +33,7 @@ import InventoryPage from './pages/Modules/InventoryPage';
 import PayrollPage from './pages/Modules/PayrollPage';
 import VideoClassesPage from './pages/Modules/VideoClassesPage';
 import ReportsBuilderPage from './pages/Modules/ReportsBuilderPage';
+import BiometricAttendancePage from './pages/Modules/BiometricAttendancePage';
 import AdmissionsPage from './pages/Modules/AdmissionsPage';
 
 // EIMS Modules
@@ -215,6 +216,14 @@ function App() {
                 element={
                   <GuardedPage path="/reports-builder" feature="reports_builder">
                     <ReportsBuilderPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/biometric-attendance"
+                element={
+                  <GuardedPage path="/biometric-attendance" feature="biometric_attendance">
+                    <BiometricAttendancePage />
                   </GuardedPage>
                 }
               />

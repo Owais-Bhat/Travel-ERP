@@ -42,6 +42,8 @@ import inventoryRouter from './routes/inventory.js';
 import payrollRouter from './routes/payroll.js';
 import videoClassesRouter from './routes/videoClasses.js';
 import reportsBuilderRouter from './routes/reportsBuilder.js';
+import biometricRouter from './routes/biometric.js';
+import biometricWebhookRouter from './routes/biometricWebhook.js';
 
 const app = express();
 
@@ -150,6 +152,9 @@ app.use('/api/inventory', inventoryRouter);
 app.use('/api/payroll', payrollRouter);
 app.use('/api/video-classes', videoClassesRouter);
 app.use('/api/reports-builder', reportsBuilderRouter);
+app.use('/api/biometric', biometricRouter);
+// Public — a scanner authenticates with its own device_code + api_key, not a user JWT.
+app.use('/api/biometric-webhook', biometricWebhookRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
