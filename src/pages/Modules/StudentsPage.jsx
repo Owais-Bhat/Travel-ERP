@@ -112,7 +112,12 @@ function StudentFormFields({ form, onChange, errors }) {
           label="Gender"
           value={form.gender}
           onChange={(e) => onChange('gender', e.target.value)}
-          options={['Male', 'Female', 'Other']}
+          options={[
+            { value: 'male', label: 'Male' },
+            { value: 'female', label: 'Female' },
+            { value: 'other', label: 'Other' },
+            { value: 'prefer_not_to_say', label: 'Prefer not to say' },
+          ]}
           placeholder="Select gender"
           className="mb-0"
         />
