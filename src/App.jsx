@@ -45,6 +45,10 @@ import ReportCardsPage from './pages/Modules/ReportCardsPage';
 import VisitorsPage from './pages/Modules/VisitorsPage';
 import FacilitiesPage from './pages/Modules/FacilitiesPage';
 import AlumniPage from './pages/Modules/AlumniPage';
+import PtmSchedulerPage from './pages/Modules/PtmSchedulerPage';
+import QuizzesPage from './pages/Modules/QuizzesPage';
+import SurveysPage from './pages/Modules/SurveysPage';
+import BranchesPage from './pages/Modules/BranchesPage';
 import PublicAdmissionFormPage from './pages/Public/PublicAdmissionFormPage';
 
 // EIMS Modules
@@ -324,6 +328,38 @@ function App() {
                 element={
                   <GuardedPage path="/alumni" feature="alumni">
                     <AlumniPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/ptm"
+                element={
+                  <GuardedPage path="/ptm" feature="ptm_scheduler">
+                    <PtmSchedulerPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/quizzes"
+                element={
+                  <GuardedPage path="/quizzes" feature="online_quiz">
+                    <QuizzesPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/surveys"
+                element={
+                  <GuardedPage path="/surveys" feature="feedback_survey">
+                    <SurveysPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/branches"
+                element={
+                  <GuardedPage path="/branches" feature="multi_branch">
+                    <BranchesPage />
                   </GuardedPage>
                 }
               />

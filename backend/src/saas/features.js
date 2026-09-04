@@ -45,13 +45,17 @@ export const FEATURE_CATALOG = [
   { key: 'visitor_management', label: 'Visitor & Gate Pass', status: 'live' },
   { key: 'facility_booking', label: 'Facility Booking', status: 'live' },
   { key: 'alumni', label: 'Alumni Network', status: 'live' },
+  { key: 'ptm_scheduler', label: 'Parent-Teacher Meeting Scheduler', status: 'live' },
+  { key: 'online_quiz', label: 'Online Quiz/Test Module', status: 'live' },
+  { key: 'feedback_survey', label: 'Feedback & Survey Builder', status: 'live' },
+  { key: 'multi_branch', label: 'Multi-Branch/Campus Management', status: 'live' },
 ];
 
 export const PLAN_DEFINITIONS = {
   free: ['dashboard', 'students', 'attendance'],
   starter: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'exams', 'communication', 'documents', 'leads'],
-  growth: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'video_classes', 'custom_branding', 'biometric_attendance', 'timetable', 'homework', 'calendar', 'id_cards', 'ai_tutor', 'performance_analysis', 'documents', 'leads', 'programs', 'certifications', 'reports', 'reports_builder', 'staff_leave', 'admission_form', 'discipline', 'report_cards', 'visitor_management', 'facility_booking', 'alumni'],
-  pro: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'payroll', 'video_classes', 'custom_branding', 'biometric_attendance', 'timetable', 'homework', 'calendar', 'id_cards', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments', 'documents', 'leads', 'programs', 'certifications', 'reports', 'scholarships', 'referrals', 'staff_leave', 'admission_form', 'discipline', 'report_cards', 'visitor_management', 'facility_booking', 'alumni'],
+  growth: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'video_classes', 'custom_branding', 'biometric_attendance', 'timetable', 'homework', 'calendar', 'id_cards', 'ai_tutor', 'performance_analysis', 'documents', 'leads', 'programs', 'certifications', 'reports', 'reports_builder', 'staff_leave', 'admission_form', 'discipline', 'report_cards', 'visitor_management', 'facility_booking', 'alumni', 'ptm_scheduler', 'online_quiz', 'feedback_survey', 'multi_branch'],
+  pro: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'payroll', 'video_classes', 'custom_branding', 'biometric_attendance', 'timetable', 'homework', 'calendar', 'id_cards', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments', 'documents', 'leads', 'programs', 'certifications', 'reports', 'scholarships', 'referrals', 'staff_leave', 'admission_form', 'discipline', 'report_cards', 'visitor_management', 'facility_booking', 'alumni', 'ptm_scheduler', 'online_quiz', 'feedback_survey', 'multi_branch'],
   enterprise: FEATURE_CATALOG.map(feature => feature.key),
 };
 

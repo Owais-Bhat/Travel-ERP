@@ -54,6 +54,10 @@ import facilitiesRouter from './routes/facilities.js';
 import alumniRouter from './routes/alumni.js';
 import reportCardsRouter from './routes/reportCards.js';
 import admissionsPublicRouter from './routes/admissionsPublic.js';
+import ptmRouter from './routes/ptm.js';
+import quizRouter from './routes/quiz.js';
+import surveysRouter from './routes/surveys.js';
+import branchesRouter from './routes/branches.js';
 
 const app = express();
 
@@ -175,6 +179,10 @@ app.use('/api/facilities', facilitiesRouter);
 app.use('/api/alumni', alumniRouter);
 app.use('/api/report-cards', reportCardsRouter);
 app.use('/api/admissions-public', admissionsPublicRouter);
+app.use('/api/ptm', ptmRouter);
+app.use('/api/quizzes', quizRouter);
+app.use('/api/surveys', surveysRouter);
+app.use('/api/branches', branchesRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
