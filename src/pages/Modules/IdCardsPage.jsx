@@ -6,6 +6,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useAppData } from '../../hooks/useAppData';
 import { useNotification } from '../../hooks/useNotification';
 import api from '../../lib/api';
+import { fileHref } from '../../utils/helpers';
 import { MdSearch, MdPrint } from 'react-icons/md';
 
 function qrUrl(data) {
@@ -37,7 +38,7 @@ function IdCard({ institution, person, personType }) {
 
       <div className="flex items-center gap-3">
         {person.photo_url ? (
-          <img src={person.photo_url} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />
+          <img src={fileHref(person.photo_url)} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />
         ) : (
           <div className="w-16 h-16 rounded-lg bg-white/10 flex items-center justify-center text-xl font-bold shrink-0">
             {person.first_name?.[0]}{person.last_name?.[0]}

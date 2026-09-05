@@ -10,7 +10,7 @@ import PhotoUpload from '../../components/Common/PhotoUpload';
 import { useAppData } from '../../hooks/useAppData';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import { formatDate } from '../../utils/helpers';
+import { formatDate, fileHref } from '../../utils/helpers';
 import api from '../../lib/api';
 import { analyzeStudentRisk } from '../../lib/openrouter';
 import {
@@ -575,7 +575,7 @@ export default function StudentsPage() {
                           <div className="flex items-center gap-2.5">
                             <Avatar
                               name={`${student.first_name} ${student.last_name}`}
-                              src={student.photo_url}
+                              src={fileHref(student.photo_url)}
                               size="sm"
                             />
                             <div>

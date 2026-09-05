@@ -10,6 +10,7 @@ import PhotoUpload from '../../components/Common/PhotoUpload';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import api from '../../lib/api';
+import { fileHref } from '../../utils/helpers';
 import { MdAdd, MdEdit, MdDelete, MdSearch, MdWarning } from 'react-icons/md';
 
 const STATUS_OPTIONS = [
@@ -216,7 +217,7 @@ export default function TeachersPage() {
                     <tr key={t.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2.5">
-                          <Avatar name={`${t.first_name} ${t.last_name || ''}`} src={t.photo_url} size="sm" />
+                          <Avatar name={`${t.first_name} ${t.last_name || ''}`} src={fileHref(t.photo_url)} size="sm" />
                           <div>
                             <p className="text-white font-medium">{t.first_name} {t.last_name}</p>
                             <p className="text-white/40 text-xs">{t.designation || t.employee_id || '—'}</p>

@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { MdCameraAlt } from 'react-icons/md';
 import Avatar from './Avatar';
 import { useNotification } from '../../hooks/useNotification';
+import { fileHref } from '../../utils/helpers';
 
 /**
  * Circular photo preview with a camera-icon button overlaid at the
@@ -34,7 +35,7 @@ export default function PhotoUpload({ name, src, onUpload, size = 'xl' }) {
 
   return (
     <div className="relative inline-block">
-      <Avatar name={name} src={preview || src} size={size} />
+      <Avatar name={name} src={preview || fileHref(src)} size={size} />
       <button
         type="button"
         onClick={() => inputRef.current?.click()}

@@ -3,6 +3,19 @@ export const formatCurrency = (value, currency = '₹') => {
   return `${currency}${value.toLocaleString('en-IN')}`;
 };
 
+/**
+ * Uploaded files (student/teacher/visitor photos, documents) are served
+ * relative to the API host, not the SPA host — the two are on different
+ * subdomains in production (erp-api. vs erp.). A bare `photo_url` from the
+ * database resolves against the wrong origin unless prefixed here.
+ */
+export const fileHref = (url) => {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  return `${apiBase.replace(/\/api\/?$/, '')}${url}`;
+};
+
 export const formatDate = (date) => {
   if (!date) return '';
   return new Date(date).toLocaleDateString('en-IN');
