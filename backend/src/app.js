@@ -58,6 +58,11 @@ import ptmRouter from './routes/ptm.js';
 import quizRouter from './routes/quiz.js';
 import surveysRouter from './routes/surveys.js';
 import branchesRouter from './routes/branches.js';
+import busTrackingWebhookRouter from './routes/busTrackingWebhook.js';
+import walletRouter from './routes/wallet.js';
+import substitutesRouter from './routes/substitutes.js';
+import healthRouter from './routes/health.js';
+import earlyWarningRouter from './routes/earlyWarning.js';
 
 const app = express();
 
@@ -183,6 +188,11 @@ app.use('/api/ptm', ptmRouter);
 app.use('/api/quizzes', quizRouter);
 app.use('/api/surveys', surveysRouter);
 app.use('/api/branches', branchesRouter);
+app.use('/api/bus-tracking', busTrackingWebhookRouter);
+app.use('/api/wallet', walletRouter);
+app.use('/api/substitutes', substitutesRouter);
+app.use('/api/health-records', healthRouter);
+app.use('/api/early-warning', earlyWarningRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

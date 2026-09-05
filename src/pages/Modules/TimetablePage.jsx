@@ -6,7 +6,7 @@ import Button from '../../components/Common/Button';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import api from '../../lib/api';
-import { MdClose, MdDelete } from 'react-icons/md';
+import { MdClose, MdDelete, MdAutoAwesome, MdAdd } from 'react-icons/md';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const PERIODS = Array.from({ length: 8 }, (_, i) => i + 1);
@@ -25,6 +25,10 @@ export default function TimetablePage() {
   const [editingCell, setEditingCell] = useState(null); // { day, period, existing }
   const [form, setForm] = useState({ subject: '', teacher_id: '' });
   const [saving, setSaving] = useState(false);
+
+  const [showAutoModal, setShowAutoModal] = useState(false);
+  const [autoSubjects, setAutoSubjects] = useState([{ subject: '', teacher_id: '', periods_per_week: 4 }]);
+  const [autoGenerating, setAutoGenerating] = useState(false);
 
   const loadSlots = async () => {
     if (!profile?.institution_id || !classAndSection.class_name) return;
@@ -92,10 +96,42 @@ export default function TimetablePage() {
     }
   };
 
+  const updateAutoSubject = (i, patch) => setAutoSubjects(prev => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
+  const addAutoSubject = () => setAutoSubjects(prev => [...prev, { subject: '', teacher_id: '', periods_per_week: 4 }]);
+  const removeAutoSubject = (i) => setAutoSubjects(prev => prev.filter((_, idx) => idx !== i));
+
+  const handleAutoGenerate = async () => {
+    const subjects = autoSubjects.filter(s => s.subject.trim());
+    if (subjects.length === 0) { notification.error('Add at least one subject'); return; }
+    setAutoGenerating(true);
+    try {
+      const { data } = await api.post('/timetable/auto-generate', {
+        ...classAndSection,
+        subjects: subjects.map(s => ({ subject: s.subject, teacher_id: s.teacher_id || null, periods_per_week: Number(s.periods_per_week) })),
+      });
+      if (data.unplaced?.length > 0) {
+        notification.error(`Placed ${data.placed}, but couldn't fit: ${data.unplaced.map(u => `${u.subject} (${u.short_by} short)`).join(', ')}`);
+      } else {
+        notification.success(`Generated ${data.placed} slot(s)!`);
+      }
+      setShowAutoModal(false);
+      loadSlots();
+    } catch (err) {
+      notification.error(err.response?.data?.error || 'Failed to auto-generate');
+    } finally {
+      setAutoGenerating(false);
+    }
+  };
+
   return (
     <MainLayout>
       <div className="p-6 space-y-6">
-        <h1 className="text-3xl font-bold text-white">Timetable</h1>
+        <div className="flex justify-between items-center">
+          <h1 className="text-3xl font-bold text-white">Timetable</h1>
+          <Button variant="secondary" onClick={() => setShowAutoModal(true)}>
+            <MdAutoAwesome className="inline mr-1 w-4 h-4" /> Auto-Generate
+          </Button>
+        </div>
 
         <GlassCard className="p-4 flex flex-wrap gap-4 items-center">
           <div>
@@ -180,6 +216,50 @@ export default function TimetablePage() {
                   </Button>
                 )}
                 <Button variant="secondary" onClick={() => setShowModal(false)}>Cancel</Button>
+              </div>
+            </GlassCard>
+          </div>,
+          document.body
+        )}
+
+        {showAutoModal && createPortal(
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <GlassCard className="w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-white font-bold text-lg">Auto-Generate Timetable — Class {classAndSection.class_name}</h3>
+                <button onClick={() => setShowAutoModal(false)} className="text-white/40 hover:text-white/70">
+                  <MdClose className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-white/40 text-xs mb-3">Existing slots are left untouched — this only fills empty cells with no teacher clashes.</p>
+              <div className="space-y-3">
+                {autoSubjects.map((s, i) => (
+                  <div key={i} className="bg-white/5 rounded-lg p-3 flex gap-2 items-end">
+                    <div className="flex-1">
+                      <label className="block text-white/50 text-xs mb-1">Subject</label>
+                      <input className="input-glass w-full" value={s.subject} onChange={e => updateAutoSubject(i, { subject: e.target.value })} />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-white/50 text-xs mb-1">Teacher</label>
+                      <select className="input-glass w-full" value={s.teacher_id} onChange={e => updateAutoSubject(i, { teacher_id: e.target.value })}>
+                        <option value="">-- None --</option>
+                        {teachers.map(t => <option key={t.id} value={t.id}>{t.first_name} {t.last_name}</option>)}
+                      </select>
+                    </div>
+                    <div className="w-20">
+                      <label className="block text-white/50 text-xs mb-1">Per Week</label>
+                      <input type="number" min="1" className="input-glass w-full" value={s.periods_per_week} onChange={e => updateAutoSubject(i, { periods_per_week: e.target.value })} />
+                    </div>
+                    {autoSubjects.length > 1 && (
+                      <button onClick={() => removeAutoSubject(i)} className="text-red-400/60 hover:text-red-400 mb-2"><MdDelete className="w-4 h-4" /></button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button onClick={addAutoSubject} className="text-blue-400 text-sm mt-3 inline-flex items-center gap-1"><MdAdd className="w-4 h-4" /> Add Subject</button>
+              <div className="flex gap-2 pt-4">
+                <Button variant="primary" loading={autoGenerating} onClick={handleAutoGenerate}>Generate</Button>
+                <Button variant="secondary" onClick={() => setShowAutoModal(false)}>Cancel</Button>
               </div>
             </GlassCard>
           </div>,

@@ -49,13 +49,19 @@ export const FEATURE_CATALOG = [
   { key: 'online_quiz', label: 'Online Quiz/Test Module', status: 'live' },
   { key: 'feedback_survey', label: 'Feedback & Survey Builder', status: 'live' },
   { key: 'multi_branch', label: 'Multi-Branch/Campus Management', status: 'live' },
+  { key: 'gps_tracking', label: 'Live GPS Bus Tracking', status: 'live' },
+  { key: 'canteen_wallet', label: 'Canteen & Student Wallet', status: 'live' },
+  { key: 'substitute_teacher', label: 'Substitute Teacher Management', status: 'live' },
+  { key: 'health_records', label: 'Health / Nurse Records', status: 'live' },
+  { key: 'early_warning', label: 'AI Early-Warning Alerts', status: 'live' },
+  { key: 'auto_timetable', label: 'Auto Timetable Generator', status: 'live' },
 ];
 
 export const PLAN_DEFINITIONS = {
   free: ['dashboard', 'students', 'attendance'],
   starter: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'exams', 'communication', 'documents', 'leads'],
-  growth: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'video_classes', 'custom_branding', 'biometric_attendance', 'timetable', 'homework', 'calendar', 'id_cards', 'ai_tutor', 'performance_analysis', 'documents', 'leads', 'programs', 'certifications', 'reports', 'reports_builder', 'staff_leave', 'admission_form', 'discipline', 'report_cards', 'visitor_management', 'facility_booking', 'alumni', 'ptm_scheduler', 'online_quiz', 'feedback_survey', 'multi_branch'],
-  pro: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'payroll', 'video_classes', 'custom_branding', 'biometric_attendance', 'timetable', 'homework', 'calendar', 'id_cards', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments', 'documents', 'leads', 'programs', 'certifications', 'reports', 'scholarships', 'referrals', 'staff_leave', 'admission_form', 'discipline', 'report_cards', 'visitor_management', 'facility_booking', 'alumni', 'ptm_scheduler', 'online_quiz', 'feedback_survey', 'multi_branch'],
+  growth: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'video_classes', 'custom_branding', 'biometric_attendance', 'timetable', 'homework', 'calendar', 'id_cards', 'ai_tutor', 'performance_analysis', 'documents', 'leads', 'programs', 'certifications', 'reports', 'reports_builder', 'staff_leave', 'admission_form', 'discipline', 'report_cards', 'visitor_management', 'facility_booking', 'alumni', 'ptm_scheduler', 'online_quiz', 'feedback_survey', 'multi_branch', 'gps_tracking', 'canteen_wallet', 'substitute_teacher', 'health_records', 'early_warning', 'auto_timetable'],
+  pro: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'payroll', 'video_classes', 'custom_branding', 'biometric_attendance', 'timetable', 'homework', 'calendar', 'id_cards', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments', 'documents', 'leads', 'programs', 'certifications', 'reports', 'scholarships', 'referrals', 'staff_leave', 'admission_form', 'discipline', 'report_cards', 'visitor_management', 'facility_booking', 'alumni', 'ptm_scheduler', 'online_quiz', 'feedback_survey', 'multi_branch', 'gps_tracking', 'canteen_wallet', 'substitute_teacher', 'health_records', 'early_warning', 'auto_timetable'],
   enterprise: FEATURE_CATALOG.map(feature => feature.key),
 };
 

@@ -49,7 +49,13 @@ import PtmSchedulerPage from './pages/Modules/PtmSchedulerPage';
 import QuizzesPage from './pages/Modules/QuizzesPage';
 import SurveysPage from './pages/Modules/SurveysPage';
 import BranchesPage from './pages/Modules/BranchesPage';
+import GpsTrackingPage from './pages/Modules/GpsTrackingPage';
+import WalletPage from './pages/Modules/WalletPage';
+import SubstitutesPage from './pages/Modules/SubstitutesPage';
+import HealthRecordsPage from './pages/Modules/HealthRecordsPage';
+import EarlyWarningPage from './pages/Modules/EarlyWarningPage';
 import PublicAdmissionFormPage from './pages/Public/PublicAdmissionFormPage';
+import DriverTrackingPage from './pages/Public/DriverTrackingPage';
 
 // EIMS Modules
 import ProgramsPage from './pages/Modules/ProgramsPage';
@@ -103,6 +109,7 @@ function App() {
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/apply/:institutionId" element={<PublicAdmissionFormPage />} />
+              <Route path="/track/:token" element={<DriverTrackingPage />} />
 
               {/* Protected routes */}
               <Route
@@ -360,6 +367,46 @@ function App() {
                 element={
                   <GuardedPage path="/branches" feature="multi_branch">
                     <BranchesPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/gps-tracking"
+                element={
+                  <GuardedPage path="/gps-tracking" feature="gps_tracking">
+                    <GpsTrackingPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/wallet"
+                element={
+                  <GuardedPage path="/wallet" feature="canteen_wallet">
+                    <WalletPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/substitutes"
+                element={
+                  <GuardedPage path="/substitutes" feature="substitute_teacher">
+                    <SubstitutesPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/health-records"
+                element={
+                  <GuardedPage path="/health-records" feature="health_records">
+                    <HealthRecordsPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/early-warning"
+                element={
+                  <GuardedPage path="/early-warning" feature="early_warning">
+                    <EarlyWarningPage />
                   </GuardedPage>
                 }
               />

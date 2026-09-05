@@ -15,6 +15,7 @@ import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
 import { findOwnedOrFail, buildUpdate } from '../lib/query.js';
 import { z, optionalText, idParam, phone, partialUpdate } from '../validation/common.js';
+import crypto from 'node:crypto';
 
 const router = express.Router();
 
@@ -239,6 +240,36 @@ router.get(
       [req.institutionId]
     );
     res.json(rows);
+  })
+);
+
+// -------------------------------------------------------- GPS tracking
+/** Mints (or re-mints) the public token a driver's phone posts location to. */
+router.post(
+  '/routes/:id/tracking-token',
+  requirePermission('students.write'),
+  requireFeature('gps_tracking'),
+  validate({ params: idParam }),
+  asyncHandler(async (req, res) => {
+    await findOwnedOrFail(db, 'transport_routes', req.params.id, req.institutionId);
+    const token = crypto.randomUUID();
+    await db.execute('UPDATE transport_routes SET tracking_token = ? WHERE id = ? AND institution_id = ?', [
+      token, req.params.id, req.institutionId,
+    ]);
+    res.json({ tracking_token: token });
+  })
+);
+
+router.get(
+  '/routes/:id/location',
+  requirePermission('students.read'),
+  requireFeature('gps_tracking'),
+  validate({ params: idParam }),
+  asyncHandler(async (req, res) => {
+    const route = await findOwnedOrFail(db, 'transport_routes', req.params.id, req.institutionId, {
+      columns: 'id, route_name, last_lat, last_lng, last_ping_at',
+    });
+    res.json(route);
   })
 );
 

@@ -109,6 +109,88 @@ router.post(
   })
 );
 
+// -------------------------------------------------------- auto-generate
+const autoGenerateSchema = z.object({
+  class_name: z.string().trim().min(1).max(50),
+  section: optionalText(20),
+  days: z.array(z.coerce.number().int().min(0).max(6)).min(1).max(7).default([0, 1, 2, 3, 4]),
+  periods_per_day: z.coerce.number().int().min(1).max(20).default(8),
+  subjects: z.array(z.object({
+    subject: z.string().trim().min(1).max(100),
+    teacher_id: z.string().uuid().nullable().optional(),
+    periods_per_week: z.coerce.number().int().min(1).max(40),
+  })).min(1).max(30),
+});
+
+/**
+ * Greedy conflict-free scheduler: walks the day/period grid for this class
+ * and drops each subject's remaining periods into the first empty cell
+ * whose teacher has no clash there — same clash rule the manual POST /
+ * endpoint enforces, just applied automatically instead of one slot at a
+ * time. Existing slots for this class/section are left untouched; only
+ * genuinely empty cells are filled, so a partially-built timetable is
+ * topped up rather than overwritten.
+ */
+router.post(
+  '/auto-generate',
+  requirePermission('students.write'),
+  requireFeature('auto_timetable'),
+  validate({ body: autoGenerateSchema }),
+  asyncHandler(async (req, res) => {
+    const body = req.body;
+    const section = body.section || '';
+
+    const [existingRows] = await db.execute(
+      'SELECT day_of_week, period_number, teacher_id FROM timetable_slots WHERE institution_id = ? AND class_name = ? AND section = ?',
+      [req.institutionId, body.class_name, section]
+    );
+    const [teacherBusyRows] = await db.execute(
+      'SELECT day_of_week, period_number, teacher_id FROM timetable_slots WHERE institution_id = ? AND teacher_id IS NOT NULL',
+      [req.institutionId]
+    );
+
+    const occupiedCells = new Set(existingRows.map((r) => `${r.day_of_week}:${r.period_number}`));
+    const teacherBusy = new Set(teacherBusyRows.map((r) => `${r.teacher_id}:${r.day_of_week}:${r.period_number}`));
+
+    const grid = [];
+    for (const day of body.days) {
+      for (let period = 1; period <= body.periods_per_day; period += 1) {
+        grid.push({ day, period });
+      }
+    }
+
+    const placements = [];
+    const unplaced = [];
+
+    for (const subj of body.subjects) {
+      let remaining = subj.periods_per_week;
+      for (const cell of grid) {
+        if (remaining === 0) break;
+        const cellKey = `${cell.day}:${cell.period}`;
+        if (occupiedCells.has(cellKey)) continue;
+        if (subj.teacher_id && teacherBusy.has(`${subj.teacher_id}:${cellKey}`)) continue;
+
+        occupiedCells.add(cellKey);
+        if (subj.teacher_id) teacherBusy.add(`${subj.teacher_id}:${cellKey}`);
+        placements.push({ ...cell, subject: subj.subject, teacher_id: subj.teacher_id || null });
+        remaining -= 1;
+      }
+      if (remaining > 0) unplaced.push({ subject: subj.subject, short_by: remaining });
+    }
+
+    for (const p of placements) {
+      const id = uuidv4();
+      await db.execute(
+        `INSERT INTO timetable_slots (id, institution_id, class_name, section, day_of_week, period_number, subject, teacher_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, req.institutionId, body.class_name, section, p.day, p.period, p.subject, p.teacher_id]
+      );
+    }
+
+    res.status(201).json({ placed: placements.length, unplaced });
+  })
+);
+
 router.delete(
   '/:id',
   requirePermission('students.write'),

@@ -1,0 +1,12 @@
+{
+  "name": "CyberMilo — Education ERP",
+  "short_name": "CyberMilo",
+  "description": "Run every institution from one calm, intelligent operations desk.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#0F172A",
+  "theme_color": "#0066FF",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
