@@ -21,6 +21,7 @@ import AdminConsolePage from './pages/Admin/AdminConsolePage';
 
 // Module Pages
 import StudentsPage from './pages/Modules/StudentsPage';
+import TeachersPage from './pages/Modules/TeachersPage';
 import FeesPage from './pages/Modules/FeesPage';
 import AttendancePage from './pages/Modules/AttendancePage';
 import ExamsPage from './pages/Modules/ExamsPage';
@@ -143,6 +144,14 @@ function App() {
                 element={
                   <GuardedPage path="/students" feature="students">
                     <StudentsPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/teachers"
+                element={
+                  <GuardedPage path="/teachers" feature="students">
+                    <TeachersPage />
                   </GuardedPage>
                 }
               />

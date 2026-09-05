@@ -36,9 +36,13 @@ function IdCard({ institution, person, personType }) {
       </div>
 
       <div className="flex items-center gap-3">
-        <div className="w-16 h-16 rounded-lg bg-white/10 flex items-center justify-center text-xl font-bold shrink-0">
-          {person.first_name?.[0]}{person.last_name?.[0]}
-        </div>
+        {person.photo_url ? (
+          <img src={person.photo_url} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />
+        ) : (
+          <div className="w-16 h-16 rounded-lg bg-white/10 flex items-center justify-center text-xl font-bold shrink-0">
+            {person.first_name?.[0]}{person.last_name?.[0]}
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <p className="font-bold text-base truncate mb-0">{person.first_name} {person.last_name}</p>
           {isStudent ? (

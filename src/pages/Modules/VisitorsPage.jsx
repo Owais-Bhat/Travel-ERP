@@ -4,6 +4,7 @@ import MainLayout from '../../components/Layout/MainLayout';
 import GlassCard from '../../components/Common/GlassCard';
 import Button from '../../components/Common/Button';
 import Input from '../../components/Common/Input';
+import PhotoUpload from '../../components/Common/PhotoUpload';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import api from '../../lib/api';
@@ -90,15 +91,29 @@ export default function VisitorsPage() {
           <div className="space-y-3">
             {visitors.map(v => (
               <GlassCard key={v.id} className="p-4 flex items-center justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <p className="text-white font-semibold">{v.visitor_name}</p>
-                    <span className={`px-2 py-0.5 text-[10px] rounded border font-medium capitalize ${v.status === 'checked_in' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-white/10 text-white/50 border-white/20'}`}>
-                      {v.status === 'checked_in' ? 'Checked In' : 'Checked Out'}
-                    </span>
+                <div className="flex items-center gap-3">
+                  <PhotoUpload
+                    name={v.visitor_name}
+                    src={v.photo_url}
+                    size="md"
+                    onUpload={async (file) => {
+                      const formData = new FormData();
+                      formData.append('file', file);
+                      const { data } = await api.post(`/visitors/${v.id}/photo`, formData);
+                      setVisitors((prev) => prev.map((x) => (x.id === v.id ? { ...x, photo_url: data.photo_url } : x)));
+                      return data.photo_url;
+                    }}
+                  />
+                  <div>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="text-white font-semibold">{v.visitor_name}</p>
+                      <span className={`px-2 py-0.5 text-[10px] rounded border font-medium capitalize ${v.status === 'checked_in' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-white/10 text-white/50 border-white/20'}`}>
+                        {v.status === 'checked_in' ? 'Checked In' : 'Checked Out'}
+                      </span>
+                    </div>
+                    <p className="text-white/50 text-sm">{v.purpose || 'No purpose given'}{v.whom_to_meet ? ` · Meeting ${v.whom_to_meet}` : ''}</p>
+                    <p className="text-white/30 text-xs mt-1">In: {formatDate(v.check_in)}{v.check_out ? ` · Out: ${formatDate(v.check_out)}` : ''}</p>
                   </div>
-                  <p className="text-white/50 text-sm">{v.purpose || 'No purpose given'}{v.whom_to_meet ? ` · Meeting ${v.whom_to_meet}` : ''}</p>
-                  <p className="text-white/30 text-xs mt-1">In: {formatDate(v.check_in)}{v.check_out ? ` · Out: ${formatDate(v.check_out)}` : ''}</p>
                 </div>
                 {v.status === 'checked_in' && (
                   <Button variant="secondary" onClick={() => handleCheckOut(v)}>

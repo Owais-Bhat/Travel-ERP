@@ -14,6 +14,7 @@ import { requirePermission } from '../auth/permissions.js';
 import { recordAuditEvent } from '../lib/audit.js';
 import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
+import { upload, publicUrlFor, uploadErrorHandler } from '../lib/uploads.js';
 import {
   parsePagination, parseSort, buildWhere, paginatedQuery, findOwnedOrFail, buildUpdate,
 } from '../lib/query.js';
@@ -154,6 +155,24 @@ router.put(
 
     const teacher = await findOwnedOrFail(db, 'teachers', req.params.id, req.institutionId);
     res.json(withSubjects(teacher));
+  })
+);
+
+router.post(
+  '/:id/photo',
+  requirePermission('programs.write'),
+  validate({ params: idParam }),
+  upload.single('file'),
+  uploadErrorHandler,
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw ApiError.badRequest('No file uploaded. Send it as multipart/form-data field "file".');
+    await findOwnedOrFail(db, 'teachers', req.params.id, req.institutionId);
+
+    const photoUrl = publicUrlFor(req.file, req.institutionId);
+    await db.execute('UPDATE teachers SET photo_url = ? WHERE id = ? AND institution_id = ?', [
+      photoUrl, req.params.id, req.institutionId,
+    ]);
+    res.json({ photo_url: photoUrl });
   })
 );
 

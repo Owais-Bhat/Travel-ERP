@@ -87,6 +87,7 @@ const TENANT_ADMIN_MENU = [
     subItems: [
       { key: 'programs', label: 'Programs & Courses', path: '/programs' },
       { key: 'students', label: 'Students', path: '/students' },
+      { key: 'teachers', label: 'Faculty Directory', path: '/teachers' },
       { key: 'attendance', label: 'Attendance', path: '/attendance' },
       { key: 'timetable', label: 'Timetable', path: '/timetable' },
       { key: 'homework', label: 'Homework', path: '/homework' },
@@ -262,6 +263,7 @@ export const MENU_ITEMS = {
     { key: 'leads', iconName: 'MdContactPhone', label: 'Lead CRM', path: '/leads' },
     { key: 'admissions', iconName: 'MdBusiness', label: 'Admissions', path: '/admissions' },
     { key: 'students', iconName: 'MdPeople', label: 'Students', path: '/students' },
+    { key: 'teachers', iconName: 'MdPeople', label: 'Faculty', path: '/teachers' },
     { key: 'discipline', iconName: 'MdGavel', label: 'Discipline', path: '/discipline' },
     { key: 'documents', iconName: 'MdFolderShared', label: 'Documents', path: '/documents' },
     { key: 'scholarships', iconName: 'MdCardGiftcard', label: 'Scholarships', path: '/scholarships' },

@@ -6,6 +6,7 @@ import Input from '../../components/Common/Input';
 import Select from '../../components/Common/Select';
 import Modal from '../../components/Common/Modal';
 import Avatar from '../../components/Common/Avatar';
+import PhotoUpload from '../../components/Common/PhotoUpload';
 import { useAppData } from '../../hooks/useAppData';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -574,6 +575,7 @@ export default function StudentsPage() {
                           <div className="flex items-center gap-2.5">
                             <Avatar
                               name={`${student.first_name} ${student.last_name}`}
+                              src={student.photo_url}
                               size="sm"
                             />
                             <div>
@@ -728,6 +730,22 @@ export default function StudentsPage() {
             </>
           }
         >
+          {editStudent && (
+            <div className="flex justify-center mb-5">
+              <PhotoUpload
+                name={`${editStudent.first_name} ${editStudent.last_name || ''}`}
+                src={editStudent.photo_url}
+                onUpload={async (file) => {
+                  const formData = new FormData();
+                  formData.append('file', file);
+                  const { data } = await api.post(`/students/${editStudent.id}/photo`, formData);
+                  setEditStudent((s) => ({ ...s, photo_url: data.photo_url }));
+                  loadStudents(profile?.institution_id);
+                  return data.photo_url;
+                }}
+              />
+            </div>
+          )}
           <StudentFormFields form={form} onChange={handleFormChange} errors={formErrors} />
         </Modal>
 

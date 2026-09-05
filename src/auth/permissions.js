@@ -8,6 +8,7 @@
 const TENANT_ADMIN_ROUTES = [
   '/dashboard',
   '/students',
+  '/teachers',
   '/attendance',
   '/exams',
   '/lms',

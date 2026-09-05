@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   MdFolderShared, MdUploadFile, MdCheckCircle, MdCancel,
-  MdPendingActions, MdBusiness, MdOpenInNew, MdDelete, MdVerified,
+  MdPendingActions, MdBusiness, MdOpenInNew, MdDelete, MdVerified, MdDescription,
 } from 'react-icons/md';
 import MainLayout from '../../components/Layout/MainLayout';
 import PageHeader from '../../components/Common/PageHeader';
@@ -150,11 +150,20 @@ export default function DocumentsPage() {
       key: 'name',
       label: 'Document',
       render: (row) => (
-        <div className="min-w-0">
-          <p className="font-semibold mb-0 truncate" style={{ color: 'var(--neu-ink)' }}>{row.name}</p>
-          <p className="text-xs mb-0" style={{ color: 'var(--neu-ink-muted)' }}>
-            {titleCase(row.doc_type)} · {formatBytes(row.size_bytes)}
-          </p>
+        <div className="flex items-center gap-2.5 min-w-0">
+          {row.mime_type?.startsWith('image/') && row.file_url ? (
+            <img src={fileHref(row.file_url)} alt="" className="w-9 h-9 rounded-lg object-cover shrink-0" />
+          ) : (
+            <div className="w-9 h-9 rounded-lg bg-black/5 flex items-center justify-center shrink-0">
+              <MdDescription className="w-4 h-4" style={{ color: 'var(--neu-ink-muted)' }} />
+            </div>
+          )}
+          <div className="min-w-0">
+            <p className="font-semibold mb-0 truncate" style={{ color: 'var(--neu-ink)' }}>{row.name}</p>
+            <p className="text-xs mb-0" style={{ color: 'var(--neu-ink-muted)' }}>
+              {titleCase(row.doc_type)} · {formatBytes(row.size_bytes)}
+            </p>
+          </div>
         </div>
       ),
     },
