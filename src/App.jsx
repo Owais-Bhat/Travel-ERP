@@ -55,6 +55,7 @@ import WalletPage from './pages/Modules/WalletPage';
 import SubstitutesPage from './pages/Modules/SubstitutesPage';
 import HealthRecordsPage from './pages/Modules/HealthRecordsPage';
 import EarlyWarningPage from './pages/Modules/EarlyWarningPage';
+import HallTicketsPage from './pages/Modules/HallTicketsPage';
 import PublicAdmissionFormPage from './pages/Public/PublicAdmissionFormPage';
 import DriverTrackingPage from './pages/Public/DriverTrackingPage';
 
@@ -416,6 +417,14 @@ function App() {
                 element={
                   <GuardedPage path="/early-warning" feature="early_warning">
                     <EarlyWarningPage />
+                  </GuardedPage>
+                }
+              />
+              <Route
+                path="/hall-tickets"
+                element={
+                  <GuardedPage path="/hall-tickets" feature="hall_tickets">
+                    <HallTicketsPage />
                   </GuardedPage>
                 }
               />

@@ -53,6 +53,7 @@ const TENANT_ADMIN_ROUTES = [
   '/substitutes',
   '/health-records',
   '/early-warning',
+  '/hall-tickets',
   '/settings',
   '/profile',
 ];
@@ -77,6 +78,7 @@ export const ROLE_PERMISSIONS = {
     '/homework',
     '/calendar',
     '/exams',
+    '/hall-tickets',
     '/report-cards',
     '/discipline',
     '/lms',

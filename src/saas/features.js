@@ -66,6 +66,7 @@ export const FEATURE_CATALOG = [
   { key: 'health_records', label: 'Health / Nurse Records', category: 'extensions', route: '/health-records', status: 'live' },
   { key: 'early_warning', label: 'AI Early-Warning Alerts', category: 'ai', route: '/early-warning', status: 'live' },
   { key: 'auto_timetable', label: 'Auto Timetable Generator', category: 'academics', route: null, status: 'live' },
+  { key: 'hall_tickets', label: 'Hall Ticket / Admit Card', category: 'academics', route: '/hall-tickets', status: 'live' },
 ];
 
 export const PLAN_DEFINITIONS = {
@@ -84,13 +85,13 @@ export const PLAN_DEFINITIONS = {
   growth: {
     label: 'Growth',
     monthlyPrice: 4999,
-    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'video_classes', 'custom_branding', 'biometric_attendance', 'timetable', 'homework', 'calendar', 'id_cards', 'ai_tutor', 'performance_analysis', 'documents', 'leads', 'programs', 'certifications', 'reports', 'reports_builder', 'staff_leave', 'admission_form', 'discipline', 'report_cards', 'visitor_management', 'facility_booking', 'alumni', 'ptm_scheduler', 'online_quiz', 'feedback_survey', 'multi_branch', 'gps_tracking', 'canteen_wallet', 'substitute_teacher', 'health_records', 'early_warning', 'auto_timetable'],
+    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'video_classes', 'custom_branding', 'biometric_attendance', 'timetable', 'homework', 'calendar', 'id_cards', 'ai_tutor', 'performance_analysis', 'documents', 'leads', 'programs', 'certifications', 'reports', 'reports_builder', 'staff_leave', 'admission_form', 'discipline', 'report_cards', 'visitor_management', 'facility_booking', 'alumni', 'ptm_scheduler', 'online_quiz', 'feedback_survey', 'multi_branch', 'gps_tracking', 'canteen_wallet', 'substitute_teacher', 'health_records', 'early_warning', 'auto_timetable', 'hall_tickets'],
     limits: { users: 100, students: 2000, aiCredits: 1000 },
   },
   pro: {
     label: 'Pro',
     monthlyPrice: 9999,
-    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'payroll', 'video_classes', 'custom_branding', 'biometric_attendance', 'timetable', 'homework', 'calendar', 'id_cards', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments', 'documents', 'leads', 'programs', 'certifications', 'reports', 'scholarships', 'referrals', 'staff_leave', 'admission_form', 'discipline', 'report_cards', 'visitor_management', 'facility_booking', 'alumni', 'ptm_scheduler', 'online_quiz', 'feedback_survey', 'multi_branch', 'gps_tracking', 'canteen_wallet', 'substitute_teacher', 'health_records', 'early_warning', 'auto_timetable'],
+    features: ['dashboard', 'students', 'admissions', 'attendance', 'fees', 'communication', 'exams', 'lms', 'transport', 'hostel', 'library', 'inventory', 'payroll', 'video_classes', 'custom_branding', 'biometric_attendance', 'timetable', 'homework', 'calendar', 'id_cards', 'ai_tutor', 'career_path', 'performance_analysis', 'fee_recovery', 'whatsapp_sms', 'reports_builder', 'payments', 'documents', 'leads', 'programs', 'certifications', 'reports', 'scholarships', 'referrals', 'staff_leave', 'admission_form', 'discipline', 'report_cards', 'visitor_management', 'facility_booking', 'alumni', 'ptm_scheduler', 'online_quiz', 'feedback_survey', 'multi_branch', 'gps_tracking', 'canteen_wallet', 'substitute_teacher', 'health_records', 'early_warning', 'auto_timetable', 'hall_tickets'],
     limits: { users: 300, students: 10000, aiCredits: 5000 },
   },
   enterprise: {

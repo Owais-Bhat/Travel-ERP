@@ -100,6 +100,7 @@ export default function ExamsPage() {
   const [classStudents, setClassStudents] = useState([]);
   const [marksInput, setMarksInput] = useState({}); // { student_id: marks }
   const [savingResults, setSavingResults] = useState(false);
+  const [clearanceMap, setClearanceMap] = useState({}); // { student_id: { cleared, pending_amount, pending_count } }
 
   // AI summary
   const [aiSummary, setAiSummary] = useState(null);
@@ -277,13 +278,25 @@ export default function ExamsPage() {
   const openEnterResults = async () => {
     if (!selectedExam) return;
     await loadClassStudents(selectedExam.class_name);
+    try {
+      const { data } = await api.get(`/exams/${selectedExam.id}/eligibility`);
+      setClearanceMap(data || {});
+    } catch {
+      setClearanceMap({});
+    }
     setEnterModal(true);
   };
 
   const handleSaveResults = async () => {
     if (!selectedExam) return;
+    const blocked = classStudents.filter((s) => marksInput[s.id] !== '' && marksInput[s.id] !== undefined && clearanceMap[s.id]?.cleared === false);
+    if (blocked.length > 0) {
+      notification.error(`${blocked.length} student(s) have pending fees — clear their fees before entering marks.`);
+      return;
+    }
+
     const entries = classStudents
-      .filter((s) => marksInput[s.id] !== '' && marksInput[s.id] !== undefined)
+      .filter((s) => marksInput[s.id] !== '' && marksInput[s.id] !== undefined && clearanceMap[s.id]?.cleared !== false)
       .map((s) => {
         const marks = parseInt(marksInput[s.id]) || 0;
         const grade = calcGrade(marks, selectedExam.total_marks);
@@ -721,9 +734,17 @@ export default function ExamsPage() {
                       {classStudents.map((s) => {
                         const marks = parseInt(marksInput[s.id]) || 0;
                         const grade = marksInput[s.id] !== '' ? calcGrade(marks, selectedExam.total_marks) : '—';
+                        const notCleared = clearanceMap[s.id]?.cleared === false;
                         return (
                           <tr key={s.id} className="border-b border-white/5">
-                            <td className="py-2 px-4 text-white">{s.first_name} {s.last_name}</td>
+                            <td className="py-2 px-4 text-white">
+                              {s.first_name} {s.last_name}
+                              {notCleared && (
+                                <span className="ml-2 px-2 py-0.5 text-[10px] rounded border font-medium bg-red-500/20 text-red-300 border-red-500/30" title={`${clearanceMap[s.id]?.pending_count} pending fee(s), ${clearanceMap[s.id]?.pending_amount} due`}>
+                                  Fee Pending
+                                </span>
+                              )}
+                            </td>
                             <td className="py-2 px-4 text-white/60">{s.admission_no}</td>
                             <td className="py-2 px-4 text-center">
                               <input
@@ -732,14 +753,15 @@ export default function ExamsPage() {
                                 max={selectedExam.total_marks}
                                 className="input-glass py-1 text-center text-sm"
                                 style={{ width: 90 }}
-                                placeholder="—"
+                                placeholder={notCleared ? 'Blocked' : '—'}
+                                disabled={notCleared}
                                 value={marksInput[s.id] ?? ''}
                                 onChange={(e) =>
                                   setMarksInput({ ...marksInput, [s.id]: e.target.value })
                                 }
                               />
                             </td>
-                            <td className="py-2 px-4 text-center font-bold text-cyan-400">{grade}</td>
+                            <td className="py-2 px-4 text-center font-bold text-cyan-400">{notCleared ? '—' : grade}</td>
                           </tr>
                         );
                       })}

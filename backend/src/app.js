@@ -63,6 +63,7 @@ import walletRouter from './routes/wallet.js';
 import substitutesRouter from './routes/substitutes.js';
 import healthRouter from './routes/health.js';
 import earlyWarningRouter from './routes/earlyWarning.js';
+import hallTicketsRouter from './routes/hallTickets.js';
 
 const app = express();
 
@@ -193,6 +194,7 @@ app.use('/api/wallet', walletRouter);
 app.use('/api/substitutes', substitutesRouter);
 app.use('/api/health-records', healthRouter);
 app.use('/api/early-warning', earlyWarningRouter);
+app.use('/api/hall-tickets', hallTicketsRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

@@ -19,6 +19,7 @@ import {
   parsePagination, parseSort, buildWhere, paginatedQuery, findOwnedOrFail, buildUpdate,
 } from '../lib/query.js';
 import { z, optionalText, longText, isoDate, listQuery, idParam, partialUpdate } from '../validation/common.js';
+import { getFeeClearance, getFeeClearanceMap } from '../lib/feeClearance.js';
 
 const router = express.Router();
 
@@ -178,6 +179,22 @@ router.get(
   })
 );
 
+/** Per-class fee-clearance snapshot, used to show badges before marks entry. */
+router.get(
+  '/:id/eligibility',
+  requirePermission('exams.read'),
+  validate({ params: idParam }),
+  asyncHandler(async (req, res) => {
+    const exam = await findOwnedOrFail(db, 'exams', req.params.id, req.institutionId);
+    const [students] = await db.execute(
+      'SELECT id FROM students WHERE institution_id = ? AND class_name = ?',
+      [req.institutionId, exam.class_name]
+    );
+    const clearanceMap = await getFeeClearanceMap(db, req.institutionId, students.map((s) => s.id));
+    res.json(clearanceMap);
+  })
+);
+
 const resultSchema = z.object({
   student_id: z.string().uuid(),
   marks_obtained: z.coerce.number().min(0).max(10000).nullable().optional(),
@@ -197,6 +214,14 @@ router.post(
       [req.body.student_id, req.institutionId]
     );
     if (students.length === 0) throw ApiError.notFound('Student not found in this institution');
+
+    const clearance = await getFeeClearance(db, req.institutionId, req.body.student_id);
+    if (!clearance.cleared) {
+      throw ApiError.conflict(
+        `This student has ${clearance.pending_count} pending fee payment(s) totalling ${clearance.pending_amount}. Fees must be cleared before exam results can be entered.`,
+        { code: 'fee_not_cleared', details: clearance }
+      );
+    }
 
     if (
       req.body.marks_obtained != null
