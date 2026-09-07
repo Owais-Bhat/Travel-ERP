@@ -37,10 +37,14 @@ router.get(
   '/slots',
   asyncHandler(async (req, res) => {
     const { teacher_id, open } = req.query;
-    const conditions = ['institution_id = ?'];
+    // Qualified with `p.` — ptm_slots joins teachers and students, both of
+    // which also have institution_id/status columns, so bare names here
+    // are ambiguous to MySQL (ER_NON_UNIQ_ERROR) even though only one
+    // table's column was ever intended.
+    const conditions = ['p.institution_id = ?'];
     const params = [req.institutionId];
-    if (teacher_id) { conditions.push('teacher_id = ?'); params.push(teacher_id); }
-    if (open === 'true') { conditions.push("status = 'open'"); }
+    if (teacher_id) { conditions.push('p.teacher_id = ?'); params.push(teacher_id); }
+    if (open === 'true') { conditions.push("p.status = 'open'"); }
 
     const [rows] = await db.execute(
       `SELECT p.*, t.first_name AS teacher_first_name, t.last_name AS teacher_last_name,
