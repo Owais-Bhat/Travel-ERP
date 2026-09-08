@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { MdPeople, MdSchool, MdEventNote, MdRefresh, MdChecklist, MdMenuBook, MdGrade } from 'react-icons/md';
@@ -23,6 +23,8 @@ export default function TeacherDashboard({ profile }) {
   const { dashboardData, loadDashboard, isLoading } = useAppData();
   const { activityLog, activityLoading, chartData, chartLoading, refresh } = useDashboardFeeds(profile?.institution_id);
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => { loadDashboard(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRefresh = async () => {
     setRefreshing(true);

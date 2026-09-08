@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import {
@@ -29,6 +29,8 @@ export default function AdminDashboard({ profile }) {
 
   const [refreshing, setRefreshing] = useState(false);
   const [checklistDismissed, setChecklistDismissed] = useState(false);
+
+  useEffect(() => { loadDashboard(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const canManageOnboarding = ['institution_admin', 'principal'].includes(profile?.role);
   const onboardingDismissed = Boolean(institution?.settings?.onboarding?.checklist_dismissed_at) || checklistDismissed;
