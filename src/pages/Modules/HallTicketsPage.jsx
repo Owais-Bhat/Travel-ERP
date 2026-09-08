@@ -7,7 +7,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import api from '../../lib/api';
 import { MdSearch, MdPrint, MdBlock } from 'react-icons/md';
-import { formatDate } from '../../utils/helpers';
+import { formatDate, fileHref } from '../../utils/helpers';
 
 function qrUrl(data) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=110x110&margin=0&data=${encodeURIComponent(data)}`;
@@ -140,7 +140,7 @@ export default function HallTicketsPage() {
             <GlassCard className="p-6 bg-white max-w-xl mx-auto">
               <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-4">
                 <div className="flex items-center gap-3">
-                  {institution?.logo_url && <img src={institution.logo_url} alt="" className="w-12 h-12 rounded object-cover" />}
+                  {institution?.logo_url && <img src={fileHref(institution.logo_url)} alt="" className="w-12 h-12 rounded object-cover" />}
                   <div>
                     <p className="font-bold text-lg text-slate-800">{institution?.name || 'CyberMilo Institution'}</p>
                     <p className="text-xs text-slate-500 uppercase tracking-wide">Hall Ticket / Admit Card</p>

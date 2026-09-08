@@ -7,6 +7,7 @@ import { canAccessPath } from '../../auth/permissions';
 import { getFeatureByRoute } from '../../saas/features';
 import Avatar from '../Common/Avatar';
 import { motion, AnimatePresence, spring } from '../Common/Motion';
+import { fileHref } from '../../utils/helpers';
 import {
   MdClose, MdChevronRight,
   MdDashboard, MdBusiness, MdCreditCard, MdTrendingUp, MdSettings,
@@ -133,7 +134,7 @@ export default function Sidebar({ isOpen, onClose }) {
           <div className="flex items-center gap-3">
             {brandLogoUrl ? (
               <img
-                src={brandLogoUrl}
+                src={fileHref(brandLogoUrl)}
                 alt="Institution logo"
                 className="w-10 h-10 rounded-2xl object-cover shrink-0"
                 style={{ boxShadow: 'var(--neu-e2)' }}

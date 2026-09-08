@@ -26,7 +26,7 @@ function IdCard({ institution, person, personType }) {
     >
       <div className="flex items-center gap-2">
         {institution?.logo_url ? (
-          <img src={institution.logo_url} alt="" className="w-8 h-8 rounded object-cover" onError={e => { e.target.style.display = 'none'; }} />
+          <img src={fileHref(institution.logo_url)} alt="" className="w-8 h-8 rounded object-cover" onError={e => { e.target.style.display = 'none'; }} />
         ) : (
           <div className="w-8 h-8 rounded bg-white/20" />
         )}
