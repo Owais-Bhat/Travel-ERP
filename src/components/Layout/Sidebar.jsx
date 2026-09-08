@@ -19,6 +19,16 @@ import {
   MdGavel, MdEventBusy, MdMeetingRoom, MdEventNote, MdQuiz, MdPoll, MdWarning,
 } from 'react-icons/md';
 
+/** WCAG relative luminance → readable ink color (near-white or near-black) for a given hex background. */
+function readableInkFor(hex) {
+  const match = /^#?([0-9a-f]{6})$/i.exec(hex?.trim() || '');
+  if (!match) return '#ffffff';
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(match[1].slice(i, i + 2), 16) / 255);
+  const toLinear = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const luminance = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+  return luminance > 0.45 ? '#10131b' : '#ffffff';
+}
+
 const ICON_MAP = {
   MdDashboard, MdBusiness, MdCreditCard, MdTrendingUp, MdSettings,
   MdPeople, MdPerson, MdAccountBalance, MdAccessTime, MdBook,
@@ -57,10 +67,21 @@ export default function Sidebar({ isOpen, onClose }) {
     const root = document.documentElement;
     if (brandPrimaryColor) {
       root.style.setProperty('--neu-primary', brandPrimaryColor);
+      // --neu-primary-ink is the text color drawn on top of --neu-primary
+      // (Send/Save buttons etc). The stylesheet default assumes a mid-bright
+      // brand color; a tenant who picks a dark or black primary color would
+      // otherwise get near-invisible dark-on-dark button text. Pick white or
+      // near-black ink from the brand color's own relative luminance instead
+      // of leaving it fixed.
+      root.style.setProperty('--neu-primary-ink', readableInkFor(brandPrimaryColor));
     } else {
       root.style.removeProperty('--neu-primary');
+      root.style.removeProperty('--neu-primary-ink');
     }
-    return () => root.style.removeProperty('--neu-primary');
+    return () => {
+      root.style.removeProperty('--neu-primary');
+      root.style.removeProperty('--neu-primary-ink');
+    };
   }, [brandPrimaryColor]);
 
   const canShowPath = (path) => {
