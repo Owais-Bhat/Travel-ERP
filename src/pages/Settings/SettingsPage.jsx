@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
+import { useAppData } from '../../hooks/useAppData';
 import { useNotification } from '../../hooks/useNotification';
 import MainLayout from '../../components/Layout/MainLayout';
 import GlassCard from '../../components/Common/GlassCard';
@@ -42,6 +43,10 @@ const MODULES = [
 
 export default function SettingsPage() {
   const { profile, user } = useAuth();
+  // Sidebar/header branding reads from the shared AppDataContext, not this
+  // page's own `institution` state below — refresh it too after any save,
+  // otherwise a new logo/color only shows up after a manual page reload.
+  const { loadInstitution: refreshSharedInstitution } = useAppData();
   const notification = useNotification();
   const [activeTab, setActiveTab] = useState('institution');
   const [saving, setSaving] = useState(false);
@@ -231,7 +236,8 @@ export default function SettingsPage() {
       formData.append('file', file);
       const { data } = await api.post('/institutions/logo', formData);
       setBranding((b) => ({ ...b, logo_url: data.logo_url }));
-      notification.success('Logo uploaded — reload to see it everywhere.');
+      await refreshSharedInstitution();
+      notification.success('Logo uploaded and applied.');
     } catch (err) {
       notification.error('Failed to upload logo: ' + (err.response?.data?.error || err.message));
     } finally {
@@ -246,7 +252,8 @@ export default function SettingsPage() {
       await api.put('/institutions/settings', {
         settings: { branding: { primary_color: branding.primary_color } },
       });
-      notification.success('Branding saved — reload to see it everywhere.');
+      await refreshSharedInstitution();
+      notification.success('Branding saved and applied.');
     } catch (err) {
       notification.error('Failed to save: ' + (err.response?.data?.error || err.message));
     } finally {
