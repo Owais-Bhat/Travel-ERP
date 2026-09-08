@@ -20,7 +20,7 @@ export const FEATURE_CATALOG = [
   { key: 'documents', label: 'Document Vault', status: 'live' },
   { key: 'reports', label: 'Reports & Analytics', status: 'live' },
   { key: 'reports_builder', label: 'Custom Report Builder', status: 'live' },
-  { key: 'payments', label: 'Payment Gateway', status: 'planned' },
+  { key: 'payments', label: 'Payment Gateway', status: 'live' },
   { key: 'whatsapp_sms', label: 'WhatsApp & SMS', status: 'planned' },
   { key: 'hostel', label: 'Hostel', status: 'live' },
   { key: 'library', label: 'Library', status: 'live' },

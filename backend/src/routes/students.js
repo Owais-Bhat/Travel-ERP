@@ -24,7 +24,7 @@ import {
   parsePagination, parseSort, buildWhere, paginatedQuery, findOwnedOrFail, buildUpdate,
 } from '../lib/query.js';
 import {
-  z, optionalText, longText, isoDate, listQuery, idParam, email, phone, partialUpdate,
+  z, optionalText, longText, isoDate, listQuery, idParam, email, phone, partialUpdate, optionalUuid,
 } from '../validation/common.js';
 
 const router = express.Router();
@@ -38,6 +38,7 @@ const SORTABLE = ['created_at', 'first_name', 'last_name', 'admission_no', 'clas
 const UPDATABLE = [
   'admission_no', 'first_name', 'last_name', 'email', 'phone', 'dob', 'gender',
   'address', 'class_name', 'section', 'parent_name', 'parent_phone', 'parent_email', 'status',
+  'user_id', 'parent_user_id',
 ];
 
 const studentSchema = z.object({
@@ -58,7 +59,27 @@ const studentSchema = z.object({
   parent_phone: phone,
   parent_email: email,
   status: z.enum(['active', 'inactive', 'alumni', 'suspended']).default('active'),
+  // Links a login account to this record — set via the "linked account"
+  // picker on the student form, not part of ordinary admission fields.
+  user_id: optionalUuid,
+  parent_user_id: optionalUuid,
 });
+
+/**
+ * `user_id`/`parent_user_id` must point at a real login in this tenant with
+ * the matching role — otherwise a student/parent dashboard could be scoped
+ * to someone else's account, or to a login that isn't even a student/parent.
+ */
+async function assertLinkableProfile(institutionId, profileId, expectedRole) {
+  if (!profileId) return;
+  const [rows] = await db.execute(
+    'SELECT id FROM user_profiles WHERE id = ? AND institution_id = ? AND role = ?',
+    [profileId, institutionId, expectedRole]
+  );
+  if (rows.length === 0) {
+    throw ApiError.badRequest(`No ${expectedRole} account with that id exists in this institution.`);
+  }
+}
 
 router.get(
   '/',
@@ -276,6 +297,9 @@ router.put(
   validate({ params: idParam, body: partialUpdate(studentSchema) }),
   asyncHandler(async (req, res) => {
     await findOwnedOrFail(db, 'students', req.params.id, req.institutionId);
+
+    if (req.body.user_id !== undefined) await assertLinkableProfile(req.institutionId, req.body.user_id, 'student');
+    if (req.body.parent_user_id !== undefined) await assertLinkableProfile(req.institutionId, req.body.parent_user_id, 'parent');
 
     const update = buildUpdate(req.body, UPDATABLE);
     if (!update) throw ApiError.badRequest('No updatable fields provided');

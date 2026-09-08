@@ -10,6 +10,7 @@ import PhotoUpload from '../../components/Common/PhotoUpload';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import api from '../../lib/api';
+import { fetchInstitutionUsers } from '../../lib/usersApi';
 import { fileHref } from '../../utils/helpers';
 import { MdAdd, MdEdit, MdDelete, MdSearch, MdWarning } from 'react-icons/md';
 
@@ -23,7 +24,7 @@ const STATUS_OPTIONS = [
 const EMPTY_FORM = {
   employee_id: '', first_name: '', last_name: '', email: '', phone: '',
   subjects: '', qualification: '', department: '', designation: '',
-  joining_date: '', experience_years: '', status: 'active',
+  joining_date: '', experience_years: '', status: 'active', user_id: '',
 };
 
 const STATUS_STYLES = {
@@ -47,6 +48,7 @@ function toFormShape(teacher) {
     joining_date: teacher.joining_date ? String(teacher.joining_date).slice(0, 10) : '',
     experience_years: teacher.experience_years ?? '',
     status: teacher.status || 'active',
+    user_id: teacher.user_id || '',
   };
 }
 
@@ -73,6 +75,12 @@ export default function TeachersPage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+
+  const [teacherLogins, setTeacherLogins] = useState([]);
+  useEffect(() => {
+    if (!profile?.institution_id) return;
+    fetchInstitutionUsers().then((data) => setTeacherLogins((data.users || []).filter((u) => u.role === 'teacher'))).catch(() => setTeacherLogins([]));
+  }, [profile?.institution_id]);
 
   const loadTeachers = async (query = search) => {
     if (!profile?.institution_id) return;
@@ -166,6 +174,16 @@ export default function TeachersPage() {
       <div className="grid grid-cols-2 gap-3">
         <Input label="Joining Date" type="date" value={form.joining_date} onChange={(e) => setForm((f) => ({ ...f, joining_date: e.target.value }))} />
         <Input label="Experience (years)" type="number" value={form.experience_years} onChange={(e) => setForm((f) => ({ ...f, experience_years: e.target.value }))} />
+      </div>
+      <div className="border-t border-white/10 pt-4">
+        <p className="text-xs text-white/40 mb-2">Link this teacher's portal login so they see their own dashboard instead of the institution-wide view.</p>
+        <Select
+          label="Linked login"
+          value={form.user_id}
+          onChange={(e) => setForm((f) => ({ ...f, user_id: e.target.value }))}
+          options={teacherLogins.map((u) => ({ value: u.id, label: `${u.first_name} ${u.last_name || ''}`.trim() }))}
+          placeholder="Not linked"
+        />
       </div>
     </>
   );

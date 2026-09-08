@@ -27,6 +27,11 @@ export const env = {
   jwtSecret: process.env.JWT_SECRET || INSECURE_JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
 
+  // 32-byte hex string for AES-256-GCM, used to encrypt tenant-supplied
+  // integration secrets (Razorpay key_secret, etc.) before they touch the
+  // database. Generate with: openssl rand -hex 32
+  encryptionKey: process.env.ENCRYPTION_KEY || '',
+
   allowedOrigins: list(process.env.FRONTEND_ORIGIN, ['http://localhost:5173']),
 
   mysql: {
@@ -94,6 +99,16 @@ export function verifyEnv({ throwOnError = env.isProduction } = {}) {
 
   if (!env.mysql.password) {
     problems.push('MYSQL_PASSWORD is empty.');
+  }
+
+  // Deliberately NOT a hard boot-time failure (unlike JWT_SECRET/MYSQL_PASSWORD
+  // above): the server must keep starting even when ENCRYPTION_KEY is unset,
+  // since only the Razorpay-config save path needs it. That path fails loudly
+  // on its own (see lib/encryption.js) — this is just a startup nudge.
+  if (env.encryptionKey && !/^[0-9a-f]{64}$/i.test(env.encryptionKey)) {
+    problems.push('ENCRYPTION_KEY is set but is not a 32-byte hex string (64 hex characters) — integration secrets cannot be saved until it is fixed.');
+  } else if (!env.encryptionKey && !env.isProduction) {
+    console.warn('[env] ENCRYPTION_KEY is unset — Razorpay/integration config cannot be saved until it is set (openssl rand -hex 32). Not fatal.');
   }
 
   if (!process.env.FRONTEND_ORIGIN) {

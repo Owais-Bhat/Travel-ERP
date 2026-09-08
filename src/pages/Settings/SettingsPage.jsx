@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import MainLayout from '../../components/Layout/MainLayout';
@@ -6,11 +6,12 @@ import GlassCard from '../../components/Common/GlassCard';
 import Button from '../../components/Common/Button';
 import Input from '../../components/Common/Input';
 import api from '../../lib/api';
+import { fileHref } from '../../utils/helpers';
 import { fetchInstitutionUsers, inviteInstitutionUser, updateInstitutionUser } from '../../lib/usersApi';
 import { fetchRoleFeatures, saveRoleFeatures } from '../../lib/institutionsApi';
 import {
   MdBusiness, MdPeople, MdSettings, MdAdd, MdDelete, MdEmail, MdShield,
-  MdContentCopy, MdCheck, MdWarning, MdPalette,
+  MdContentCopy, MdCheck, MdWarning, MdPalette, MdPayment,
 } from 'react-icons/md';
 
 const TABS = [
@@ -19,6 +20,7 @@ const TABS = [
   { key: 'users', label: 'Users & Roles', icon: MdPeople },
   { key: 'roleAccess', label: 'Role Access', icon: MdShield },
   { key: 'modules', label: 'Modules', icon: MdSettings },
+  { key: 'integrations', label: 'Integrations', icon: MdPayment },
 ];
 
 const ROLE_LABELS = {
@@ -48,6 +50,13 @@ export default function SettingsPage() {
   const [institution, setInstitution] = useState({ name: '', type: '', address: '', phone: '', email: '' });
   const [branding, setBranding] = useState({ logo_url: '', primary_color: '' });
   const [savingBranding, setSavingBranding] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = useRef(null);
+
+  // ── Integrations (Razorpay config — storage only, no live payments) ──
+  const [razorpay, setRazorpay] = useState({ enabled: false, key_id: '', key_secret: '', key_secret_set: false });
+  const [loadingRazorpay, setLoadingRazorpay] = useState(false);
+  const [savingRazorpay, setSavingRazorpay] = useState(false);
   const [users, setUsers] = useState([]);
   const [modules, setModules] = useState({});
   const [plan, setPlan] = useState('free');
@@ -80,8 +89,36 @@ export default function SettingsPage() {
       loadInstitution();
       if (activeTab === 'users') loadUsers();
       if (activeTab === 'roleAccess') loadRoleFeatures();
+      if (activeTab === 'integrations') loadRazorpay();
     }
   }, [profile?.institution_id, activeTab]);
+
+  const loadRazorpay = async () => {
+    setLoadingRazorpay(true);
+    try {
+      const { data } = await api.get('/institutions/integrations/razorpay');
+      setRazorpay({ enabled: Boolean(data.enabled), key_id: data.key_id || '', key_secret: '', key_secret_set: Boolean(data.key_secret_set) });
+    } catch (err) {
+      notification.error(err.response?.data?.error || 'Failed to load integration settings');
+    } finally {
+      setLoadingRazorpay(false);
+    }
+  };
+
+  const saveRazorpay = async () => {
+    setSavingRazorpay(true);
+    try {
+      const body = { enabled: razorpay.enabled, key_id: razorpay.key_id };
+      if (razorpay.key_secret) body.key_secret = razorpay.key_secret;
+      const { data } = await api.put('/institutions/integrations/razorpay', body);
+      setRazorpay({ enabled: Boolean(data.enabled), key_id: data.key_id || '', key_secret: '', key_secret_set: Boolean(data.key_secret_set) });
+      notification.success('Razorpay settings saved. This stores config only — checkout isn\'t wired up yet.');
+    } catch (err) {
+      notification.error(err.response?.data?.error || 'Failed to save integration settings');
+    } finally {
+      setSavingRazorpay(false);
+    }
+  };
 
   const loadInstitution = async () => {
     try {
@@ -184,6 +221,21 @@ export default function SettingsPage() {
       notification.error('Failed to save: ' + (err.response?.data?.error || err.message));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const uploadLogo = async (file) => {
+    setUploadingLogo(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const { data } = await api.post('/institutions/logo', formData);
+      setBranding((b) => ({ ...b, logo_url: data.logo_url }));
+      notification.success('Logo uploaded — reload to see it everywhere.');
+    } catch (err) {
+      notification.error('Failed to upload logo: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setUploadingLogo(false);
     }
   };
 
@@ -334,12 +386,40 @@ export default function SettingsPage() {
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                label="Logo URL"
-                placeholder="https://your-school.com/logo.png"
-                value={branding.logo_url}
-                onChange={e => setBranding(b => ({ ...b, logo_url: e.target.value }))}
-              />
+              <div>
+                <label className="block text-white/60 text-sm mb-1">Logo</label>
+                <div className="flex items-center gap-3">
+                  {branding.logo_url && (
+                    <img
+                      src={fileHref(branding.logo_url)}
+                      alt="Logo preview"
+                      className="h-12 w-12 object-contain rounded bg-white/5 p-1 border border-white/10"
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
+                  )}
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = '';
+                      if (file) uploadLogo(file);
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    loading={uploadingLogo}
+                    onClick={() => logoInputRef.current?.click()}
+                  >
+                    {branding.logo_url ? 'Replace Logo' : 'Upload Logo'}
+                  </Button>
+                </div>
+                <p className="text-white/30 text-xs mt-1">PNG or SVG works best. Uploads and applies immediately.</p>
+              </div>
               <div>
                 <label className="block text-white/60 text-sm mb-1">Primary Color</label>
                 <div className="flex items-center gap-3">
@@ -358,13 +438,57 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
-            {branding.logo_url && (
-              <div>
-                <p className="text-white/40 text-xs mb-2">Preview</p>
-                <img src={branding.logo_url} alt="Logo preview" className="h-12 rounded bg-white/5 p-1" onError={e => { e.target.style.display = 'none'; }} />
-              </div>
-            )}
             <Button variant="primary" onClick={saveBranding} loading={savingBranding}>Save Branding</Button>
+          </GlassCard>
+        )}
+
+        {activeTab === 'integrations' && (
+          <GlassCard className="p-6 space-y-5">
+            <div>
+              <h2 className="text-lg font-bold text-white">Razorpay</h2>
+              <p className="text-white/50 text-sm mb-0">
+                Saves your Razorpay credentials so a checkout flow can use them later. This screen only stores
+                config — no payment is processed and no fee-collection flow is wired up to it yet.
+              </p>
+            </div>
+
+            {!modules?.payments ? (
+              <div className="neu-alert neu-alert-warning">
+                <span>Payment Gateway isn't included in your current plan. Contact support to enable it.</span>
+              </div>
+            ) : loadingRazorpay ? (
+              <p className="text-white/40 text-sm">Loading…</p>
+            ) : (
+              <>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={razorpay.enabled}
+                    onChange={(e) => setRazorpay((r) => ({ ...r, enabled: e.target.checked }))}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-white text-sm font-medium">Enable Razorpay</span>
+                </label>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input
+                    label="Key ID"
+                    placeholder="rzp_live_..."
+                    value={razorpay.key_id}
+                    onChange={(e) => setRazorpay((r) => ({ ...r, key_id: e.target.value }))}
+                  />
+                  <Input
+                    label={`Key Secret${razorpay.key_secret_set ? ' (already set — leave blank to keep it)' : ''}`}
+                    type="password"
+                    placeholder={razorpay.key_secret_set ? '••••••••••••' : 'Enter your Razorpay key secret'}
+                    value={razorpay.key_secret}
+                    onChange={(e) => setRazorpay((r) => ({ ...r, key_secret: e.target.value }))}
+                  />
+                </div>
+
+                <Button variant="primary" onClick={saveRazorpay} loading={savingRazorpay}>Save Razorpay Settings</Button>
+              </>
+            )}
           </GlassCard>
         )}
 

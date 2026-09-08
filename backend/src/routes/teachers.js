@@ -19,7 +19,7 @@ import {
   parsePagination, parseSort, buildWhere, paginatedQuery, findOwnedOrFail, buildUpdate,
 } from '../lib/query.js';
 import {
-  z, optionalText, isoDate, listQuery, idParam, email, phone, partialUpdate,
+  z, optionalText, isoDate, listQuery, idParam, email, phone, partialUpdate, optionalUuid,
 } from '../validation/common.js';
 
 const router = express.Router();
@@ -31,6 +31,7 @@ const SORTABLE = ['created_at', 'first_name', 'last_name', 'employee_id', 'depar
 const UPDATABLE = [
   'employee_id', 'first_name', 'last_name', 'email', 'phone', 'subjects',
   'qualification', 'status', 'department', 'designation', 'joining_date', 'experience_years',
+  'user_id',
 ];
 
 const teacherSchema = z.object({
@@ -46,7 +47,21 @@ const teacherSchema = z.object({
   joining_date: isoDate,
   experience_years: z.coerce.number().min(0).max(70).optional(),
   status: z.enum(['active', 'inactive', 'on_leave', 'resigned']).default('active'),
+  // Links a teacher-role login to this faculty record for the teacher dashboard.
+  user_id: optionalUuid,
 });
+
+/** `user_id` must be a real teacher-role login in this tenant. */
+async function assertLinkableTeacherProfile(institutionId, profileId) {
+  if (!profileId) return;
+  const [rows] = await db.execute(
+    'SELECT id FROM user_profiles WHERE id = ? AND institution_id = ? AND role = ?',
+    [profileId, institutionId, 'teacher']
+  );
+  if (rows.length === 0) {
+    throw ApiError.badRequest('No teacher account with that id exists in this institution.');
+  }
+}
 
 /** mysql2 parses JSON columns already; tolerate a string for older rows. */
 function withSubjects(row) {
@@ -141,6 +156,8 @@ router.put(
   validate({ params: idParam, body: partialUpdate(teacherSchema) }),
   asyncHandler(async (req, res) => {
     await findOwnedOrFail(db, 'teachers', req.params.id, req.institutionId);
+
+    if (req.body.user_id !== undefined) await assertLinkableTeacherProfile(req.institutionId, req.body.user_id);
 
     const payload = { ...req.body };
     if (payload.subjects !== undefined) payload.subjects = JSON.stringify(payload.subjects);

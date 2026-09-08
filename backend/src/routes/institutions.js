@@ -13,10 +13,13 @@ import db from '../lib/db.js';
 import { requireAuthenticatedProfile } from '../middleware/auth.js';
 import { requireInstitution } from '../middleware/tenant.js';
 import { requirePermission } from '../auth/permissions.js';
+import { requireFeature } from '../middleware/feature.js';
 import { recordAuditEvent } from '../lib/audit.js';
 import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
 import { buildUpdate } from '../lib/query.js';
+import { upload, publicUrlFor, uploadErrorHandler } from '../lib/uploads.js';
+import { encrypt } from '../lib/encryption.js';
 import { z, optionalText, longText, email, phone } from '../validation/common.js';
 import {
   getBillingState, getPlanFeatureMap, getEffectiveFeatureMap,
@@ -115,6 +118,29 @@ router.put(
   })
 );
 
+router.post(
+  '/logo',
+  requireInstitution,
+  requirePermission('institution.manage'),
+  upload.single('file'),
+  uploadErrorHandler,
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw ApiError.badRequest('No file uploaded. Send it as multipart/form-data field "file".');
+
+    const logoUrl = publicUrlFor(req.file, req.institutionId);
+    await db.execute('UPDATE institutions SET logo_url = ? WHERE id = ?', [logoUrl, req.institutionId]);
+
+    await recordAuditEvent(req, {
+      institutionId: req.institutionId,
+      action: 'institution.logo_updated',
+      entityType: 'institution',
+      entityId: req.institutionId,
+    });
+
+    res.json({ logo_url: logoUrl });
+  })
+);
+
 router.put(
   '/settings',
   requireInstitution,
@@ -155,6 +181,71 @@ router.put(
       // Told, not silently dropped, so the caller can see what was refused.
       ignored: rejected,
     });
+  })
+);
+
+// ------------------------------------------------------------------
+// Razorpay config — storage + a feature flag only, no live payment
+// processing. `key_secret` never round-trips in plaintext: it's encrypted
+// server-side before it's written, and never sent back to the client.
+// Kept as its own endpoint rather than folding into PUT /settings above,
+// since that generic path has no encryption step.
+// ------------------------------------------------------------------
+const razorpaySchema = z.object({
+  enabled: z.boolean().default(false),
+  key_id: optionalText(100),
+  key_secret: optionalText(255),
+});
+
+router.get(
+  '/integrations/razorpay',
+  requireInstitution,
+  requirePermission('institution.manage'),
+  asyncHandler(async (req, res) => {
+    const [rows] = await db.execute('SELECT settings FROM institutions WHERE id = ?', [req.institutionId]);
+    if (!rows[0]) throw ApiError.notFound('Institution not found');
+
+    const razorpay = readSettings(rows[0].settings).integrations?.razorpay || {};
+    res.json({
+      enabled: Boolean(razorpay.enabled),
+      key_id: razorpay.key_id || '',
+      key_secret_set: Boolean(razorpay.key_secret_enc),
+    });
+  })
+);
+
+router.put(
+  '/integrations/razorpay',
+  requireInstitution,
+  requirePermission('institution.manage'),
+  requireFeature('payments'),
+  validate({ body: razorpaySchema }),
+  asyncHandler(async (req, res) => {
+    const [rows] = await db.execute('SELECT settings FROM institutions WHERE id = ?', [req.institutionId]);
+    if (!rows[0]) throw ApiError.notFound('Institution not found');
+
+    const current = readSettings(rows[0].settings);
+    const existingRazorpay = current.integrations?.razorpay || {};
+
+    const nextRazorpay = {
+      enabled: req.body.enabled,
+      key_id: req.body.key_id || '',
+      // Omit key_secret to edit enabled/key_id without re-entering it.
+      key_secret_enc: req.body.key_secret ? encrypt(req.body.key_secret) : existingRazorpay.key_secret_enc,
+    };
+
+    const next = { ...current, integrations: { ...(current.integrations || {}), razorpay: nextRazorpay } };
+    await db.execute('UPDATE institutions SET settings = ? WHERE id = ?', [JSON.stringify(next), req.institutionId]);
+
+    await recordAuditEvent(req, {
+      institutionId: req.institutionId,
+      action: 'institution.integrations_updated',
+      entityType: 'institution',
+      entityId: req.institutionId,
+      metadata: { integration: 'razorpay', enabled: nextRazorpay.enabled, key_secret_changed: Boolean(req.body.key_secret) },
+    });
+
+    res.json({ enabled: nextRazorpay.enabled, key_id: nextRazorpay.key_id, key_secret_set: Boolean(nextRazorpay.key_secret_enc) });
   })
 );
 

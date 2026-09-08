@@ -12,6 +12,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate, fileHref } from '../../utils/helpers';
 import api from '../../lib/api';
+import { fetchInstitutionUsers } from '../../lib/usersApi';
 import { analyzeStudentRisk } from '../../lib/openrouter';
 import {
   MdAdd,
@@ -46,6 +47,8 @@ const EMPTY_FORM = {
   parent_email: '',
   address: '',
   status: 'active',
+  user_id: '',
+  parent_user_id: '',
 };
 
 function StatusBadge({ status }) {
@@ -61,7 +64,7 @@ function StatusBadge({ status }) {
   );
 }
 
-function StudentFormFields({ form, onChange, errors }) {
+function StudentFormFields({ form, onChange, errors, studentLogins = [], parentLogins = [] }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
@@ -194,6 +197,30 @@ function StudentFormFields({ form, onChange, errors }) {
         ]}
         className="mb-0"
       />
+      <div className="border-t border-white/10 pt-4">
+        <p className="text-sm text-white/50 mb-3 uppercase tracking-wider">Linked Login Accounts</p>
+        <p className="text-xs text-white/40 mb-3">
+          Links a portal login to this record so it sees its own dashboard instead of the institution-wide view.
+        </p>
+        <div className="grid grid-cols-2 gap-4">
+          <Select
+            label="Student's own login"
+            value={form.user_id}
+            onChange={(e) => onChange('user_id', e.target.value)}
+            options={studentLogins.map((u) => ({ value: u.id, label: `${u.first_name} ${u.last_name || ''}`.trim() }))}
+            placeholder="Not linked"
+            className="mb-0"
+          />
+          <Select
+            label="Parent's login"
+            value={form.parent_user_id}
+            onChange={(e) => onChange('parent_user_id', e.target.value)}
+            options={parentLogins.map((u) => ({ value: u.id, label: `${u.first_name} ${u.last_name || ''}`.trim() }))}
+            placeholder="Not linked"
+            className="mb-0"
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -223,6 +250,15 @@ export default function StudentsPage() {
   // Form state
   const [form, setForm] = useState(EMPTY_FORM);
   const [formErrors, setFormErrors] = useState({});
+
+  // Portal logins available to link (student's own account / parent's account)
+  const [tenantUsers, setTenantUsers] = useState([]);
+  useEffect(() => {
+    if (!profile?.institution_id) return;
+    fetchInstitutionUsers().then((data) => setTenantUsers(data.users || [])).catch(() => setTenantUsers([]));
+  }, [profile?.institution_id]);
+  const studentLogins = tenantUsers.filter((u) => u.role === 'student');
+  const parentLogins = tenantUsers.filter((u) => u.role === 'parent');
 
   // Filter / search / pagination
   const [searchTerm, setSearchTerm] = useState('');
@@ -307,6 +343,8 @@ export default function StudentsPage() {
       parent_email: student.parent_email || '',
       address: student.address || '',
       status: student.status || 'active',
+      user_id: student.user_id || '',
+      parent_user_id: student.parent_user_id || '',
     });
     setFormErrors({});
     setEditStudent(student);
@@ -710,7 +748,7 @@ export default function StudentsPage() {
             </>
           }
         >
-          <StudentFormFields form={form} onChange={handleFormChange} errors={formErrors} />
+          <StudentFormFields form={form} onChange={handleFormChange} errors={formErrors} studentLogins={studentLogins} parentLogins={parentLogins} />
         </Modal>
 
         {/* Edit Student Modal */}
@@ -746,7 +784,7 @@ export default function StudentsPage() {
               />
             </div>
           )}
-          <StudentFormFields form={form} onChange={handleFormChange} errors={formErrors} />
+          <StudentFormFields form={form} onChange={handleFormChange} errors={formErrors} studentLogins={studentLogins} parentLogins={parentLogins} />
         </Modal>
 
         {/* Delete Confirmation Modal */}
