@@ -1,22 +1,44 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import MainLayout from '../../components/Layout/MainLayout';
 import GlassCard from '../../components/Common/GlassCard';
 import Button from '../../components/Common/Button';
 import { useAppData } from '../../hooks/useAppData';
+import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import api from '../../lib/api';
 import { MdSearch, MdPrint } from 'react-icons/md';
 import { formatDate, fileHref } from '../../utils/helpers';
 
+const SELF_SERVICE_ROLES = ['student', 'parent'];
+
 export default function ReportCardsPage() {
   const { institution } = useAppData();
+  const { profile } = useAuth();
   const notification = useNotification();
+  const selfService = SELF_SERVICE_ROLES.includes(profile?.role);
 
   const [search, setSearch] = useState('');
   const [results, setResults] = useState([]);
+  const [myChildren, setMyChildren] = useState([]);
   const [student, setStudent] = useState(null);
   const [examResults, setExamResults] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  // Self-service: no search — load own (or children's) linked record(s)
+  // directly, and auto-select when there's exactly one.
+  useEffect(() => {
+    if (!selfService) return;
+    (async () => {
+      setLoading(true);
+      try {
+        const { data } = await api.get('/students/me');
+        setMyChildren(data || []);
+        if ((data || []).length === 1) await selectStudent(data[0]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [selfService]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runSearch = async (val) => {
     setSearch(val);
@@ -60,7 +82,7 @@ export default function ReportCardsPage() {
         `}</style>
 
         <div className="flex justify-between items-center print:hidden">
-          <h1 className="text-3xl font-bold text-white">Report Card Generator</h1>
+          <h1 className="text-3xl font-bold text-white">{selfService ? 'Report Card' : 'Report Card Generator'}</h1>
           {student && (
             <Button variant="primary" onClick={() => window.print()}>
               <MdPrint className="inline mr-1" /> Print
@@ -68,6 +90,24 @@ export default function ReportCardsPage() {
           )}
         </div>
 
+        {selfService && myChildren.length > 1 && (
+          <GlassCard className="p-4 print:hidden">
+            <p className="text-white/60 text-sm mb-2">Select a child</p>
+            <div className="flex flex-wrap gap-2">
+              {myChildren.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => selectStudent(c)}
+                  className={`px-3 py-2 rounded-lg text-sm transition ${student?.id === c.id ? 'bg-indigo-500/30 text-white' : 'bg-white/5 hover:bg-white/10 text-white/80'}`}
+                >
+                  {c.first_name} {c.last_name} · Class {c.class_name}
+                </button>
+              ))}
+            </div>
+          </GlassCard>
+        )}
+
+        {!selfService && (
         <GlassCard className="p-4 print:hidden">
           <div className="relative">
             <MdSearch className="absolute left-3 top-3 w-4 h-4 text-white/40" />
@@ -83,11 +123,16 @@ export default function ReportCardsPage() {
             </div>
           )}
         </GlassCard>
+        )}
 
         {loading ? (
           <div className="text-center py-12 text-white/50">Loading...</div>
         ) : !student ? (
-          <GlassCard className="p-10 text-center text-white/40 print:hidden">Search and select a student to generate their report card.</GlassCard>
+          <GlassCard className="p-10 text-center text-white/40 print:hidden">
+            {selfService
+              ? (myChildren.length === 0 ? 'No student record is linked to your account yet.' : 'Select a child above to view their report card.')
+              : 'Search and select a student to generate their report card.'}
+          </GlassCard>
         ) : (
           <div id="report-card-print-area">
             <GlassCard className="p-6 bg-white">

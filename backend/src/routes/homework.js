@@ -14,6 +14,7 @@ import { requirePermission } from '../auth/permissions.js';
 import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
 import { findOwnedOrFail } from '../lib/query.js';
+import { resolveRoleScope } from '../lib/roleScope.js';
 import { z, optionalText, longText, idParam } from '../validation/common.js';
 
 const router = express.Router();
@@ -24,9 +25,17 @@ router.use(requireFeature('homework'));
 
 router.get(
   '/',
-  requirePermission('students.read'),
+  requirePermission('attendance.read'),
   validate({ query: z.object({ class_name: z.string().max(50).optional() }) }),
   asyncHandler(async (req, res) => {
+    // A student/parent only ever sees homework for their own (or their
+    // child's) class — overrides whatever class_name was requested.
+    let className = req.query.class_name || null;
+    if (['student', 'parent'].includes(req.auth.profile.role)) {
+      const scope = await resolveRoleScope(req);
+      className = scope?.classNames[0] || '__none__';
+    }
+
     const [rows] = await db.execute(
       `SELECT h.*, t.first_name AS teacher_first_name, t.last_name AS teacher_last_name,
               (SELECT COUNT(*) FROM homework_submissions s WHERE s.homework_id = h.id) AS submission_count
@@ -34,7 +43,7 @@ router.get(
          LEFT JOIN teachers t ON t.id = h.teacher_id
         WHERE h.institution_id = ? AND (? IS NULL OR h.class_name = ?)
         ORDER BY h.due_date DESC`,
-      [req.institutionId, req.query.class_name || null, req.query.class_name || null]
+      [req.institutionId, className, className]
     );
     res.json(rows);
   })
@@ -81,17 +90,30 @@ router.delete(
 // -------------------------------------------------------- submissions
 router.get(
   '/:id/submissions',
-  requirePermission('students.read'),
+  requirePermission('attendance.read'),
   validate({ params: idParam }),
   asyncHandler(async (req, res) => {
     await findOwnedOrFail(db, 'homework', req.params.id, req.institutionId);
+
+    // A student/parent only ever sees their own (or their child's)
+    // submission — not the whole class's, which would leak classmates'
+    // notes/links/grades.
+    const conditions = ['sub.homework_id = ?', 'sub.institution_id = ?'];
+    const params = [req.params.id, req.institutionId];
+    if (['student', 'parent'].includes(req.auth.profile.role)) {
+      const scope = await resolveRoleScope(req);
+      if (!scope?.studentIds.length) return res.json([]);
+      conditions.push(`sub.student_id IN (${scope.studentIds.map(() => '?').join(',')})`);
+      params.push(...scope.studentIds);
+    }
+
     const [rows] = await db.execute(
       `SELECT sub.*, s.first_name, s.last_name, s.admission_no
          FROM homework_submissions sub
          JOIN students s ON s.id = sub.student_id
-        WHERE sub.homework_id = ? AND sub.institution_id = ?
+        WHERE ${conditions.join(' AND ')}
         ORDER BY sub.submitted_at DESC`,
-      [req.params.id, req.institutionId]
+      params
     );
     res.json(rows);
   })
@@ -99,12 +121,24 @@ router.get(
 
 router.post(
   '/:id/submissions',
-  requirePermission('students.write'),
   validate({
     params: idParam,
     body: z.object({ student_id: z.string().uuid(), note: longText, link: optionalText(500) }),
   }),
   asyncHandler(async (req, res) => {
+    // A student submits their own work directly (no `students.write` — that
+    // permission is for staff editing student records, not a student
+    // turning in homework). Anyone else needs it, to submit on a student's
+    // behalf.
+    if (req.auth.profile.role === 'student') {
+      const scope = await resolveRoleScope(req);
+      if (!scope?.studentIds.includes(req.body.student_id)) {
+        throw ApiError.forbidden('You can only submit your own homework.');
+      }
+    } else if (!req.auth.profile.role || !['institution_admin', 'principal', 'teacher', 'staff', 'super_admin'].includes(req.auth.profile.role)) {
+      throw ApiError.forbidden('You do not have permission to submit homework for this student.');
+    }
+
     const homework = await findOwnedOrFail(db, 'homework', req.params.id, req.institutionId);
     await findOwnedOrFail(db, 'students', req.body.student_id, req.institutionId);
 

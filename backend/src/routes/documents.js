@@ -16,6 +16,7 @@ import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
 import { upload, publicUrlFor, removeStoredFile, uploadErrorHandler, uploadsRoot } from '../lib/uploads.js';
 import { parsePagination, parseSort, buildWhere, paginatedQuery } from '../lib/query.js';
+import { resolveRoleScope, inClause } from '../lib/roleScope.js';
 import { z, optionalText, longText, listQuery, idParam } from '../validation/common.js';
 
 const router = express.Router();
@@ -51,6 +52,12 @@ router.get(
     const { page, pageSize, offset } = parsePagination(req.query);
     const sort = parseSort(req.query, ['created_at', 'name', 'status', 'doc_type'], 'created_at');
 
+    // A student/parent only ever sees their own (or their child's) uploaded
+    // documents — these are ID proofs, birth certificates etc, not something
+    // `documents.read` alone should expose institution-wide.
+    const scope = await resolveRoleScope(req);
+    const raw = scope ? [inClause('d.student_id', scope.studentIds)] : [];
+
     const { clause, params } = buildWhere({
       alias: 'd',
       equals: {
@@ -62,6 +69,7 @@ router.get(
       },
       search: req.query.search,
       searchColumns: ['name'],
+      raw,
     });
 
     const result = await paginatedQuery(db, {

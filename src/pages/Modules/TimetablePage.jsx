@@ -12,11 +12,17 @@ const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
 const PERIODS = Array.from({ length: 8 }, (_, i) => i + 1);
 const CLASS_OPTIONS = ['Nursery', 'KG', ...Array.from({ length: 12 }, (_, i) => String(i + 1))];
 
+const SELF_SERVICE_ROLES = ['student', 'parent'];
+
 export default function TimetablePage() {
   const { profile } = useAuth();
   const notification = useNotification();
+  const selfService = SELF_SERVICE_ROLES.includes(profile?.role);
 
-  const [classAndSection, setClassAndSection] = useState({ class_name: '5', section: '' });
+  // For self-service roles the backend ignores this and resolves the
+  // caller's own (or child's) class/section instead — 'me' just satisfies
+  // the required-field query validation.
+  const [classAndSection, setClassAndSection] = useState({ class_name: selfService ? 'me' : '5', section: '' });
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [teachers, setTeachers] = useState([]);
@@ -127,12 +133,15 @@ export default function TimetablePage() {
     <MainLayout>
       <div className="p-6 space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-white">Timetable</h1>
-          <Button variant="secondary" onClick={() => setShowAutoModal(true)}>
-            <MdAutoAwesome className="inline mr-1 w-4 h-4" /> Auto-Generate
-          </Button>
+          <h1 className="text-3xl font-bold text-white">{selfService ? 'My Timetable' : 'Timetable'}</h1>
+          {!selfService && (
+            <Button variant="secondary" onClick={() => setShowAutoModal(true)}>
+              <MdAutoAwesome className="inline mr-1 w-4 h-4" /> Auto-Generate
+            </Button>
+          )}
         </div>
 
+        {!selfService && (
         <GlassCard className="p-4 flex flex-wrap gap-4 items-center">
           <div>
             <label className="block text-white/60 text-xs mb-1.5">Class</label>
@@ -145,6 +154,7 @@ export default function TimetablePage() {
             <input className="input-glass" placeholder="e.g. A" value={classAndSection.section} onChange={e => setClassAndSection(c => ({ ...c, section: e.target.value }))} />
           </div>
         </GlassCard>
+        )}
 
         {loading ? (
           <div className="text-center py-12 text-white/50">Loading...</div>
@@ -163,12 +173,13 @@ export default function TimetablePage() {
                     <td className="text-white/60 text-xs font-semibold text-center p-2">P{period}</td>
                     {DAYS.map((_, dayIdx) => {
                       const slot = slotFor(dayIdx, period);
+                      const Cell = selfService ? 'div' : 'button';
                       return (
                         <td key={dayIdx}>
-                          <button
-                            onClick={() => openCell(dayIdx, period)}
-                            className={`w-full min-w-[100px] h-16 rounded-lg text-xs p-2 transition text-left ${
-                              slot ? 'bg-blue-500/20 border border-blue-500/30 text-blue-200 hover:bg-blue-500/30' : 'bg-white/5 border border-white/10 text-white/30 hover:bg-white/10'
+                          <Cell
+                            onClick={selfService ? undefined : () => openCell(dayIdx, period)}
+                            className={`w-full min-w-[100px] h-16 rounded-lg text-xs p-2 transition text-left block ${
+                              slot ? 'bg-blue-500/20 border border-blue-500/30 text-blue-200 hover:bg-blue-500/30' : 'bg-white/5 border border-white/10 text-white/30'
                             }`}
                           >
                             {slot ? (
@@ -176,8 +187,8 @@ export default function TimetablePage() {
                                 <p className="font-semibold truncate mb-0.5">{slot.subject}</p>
                                 {slot.teacher_first_name && <p className="text-blue-300/70 truncate">{slot.teacher_first_name} {slot.teacher_last_name}</p>}
                               </>
-                            ) : '+ Add'}
-                          </button>
+                            ) : (selfService ? '—' : '+ Add')}
+                          </Cell>
                         </td>
                       );
                     })}

@@ -53,6 +53,7 @@ function CourseThumb({ url, title }) {
 export default function LmsPage() {
   const { profile } = useAuth();
   const notification = useNotification();
+  const canManage = !['student', 'parent'].includes(profile?.role);
 
   // view state: 'courses' | 'detail'
   const [view, setView] = useState('courses');
@@ -253,9 +254,11 @@ export default function LmsPage() {
           <>
             <div className="flex flex-wrap justify-between items-center gap-3">
               <h1 className="text-3xl font-bold font-display text-white">Learning Management</h1>
-              <Button variant="primary" size="sm" onClick={() => setCreateCourseModal(true)}>
-                <MdAdd className="mr-1 inline" /> Create Course
-              </Button>
+              {canManage && (
+                <Button variant="primary" size="sm" onClick={() => setCreateCourseModal(true)}>
+                  <MdAdd className="mr-1 inline" /> Create Course
+                </Button>
+              )}
             </div>
 
             {loadingCourses ? (
@@ -268,9 +271,11 @@ export default function LmsPage() {
                 <MdBook className="w-16 h-16 text-white/20" />
                 <p className="text-white/50 text-xl">No courses yet</p>
                 <p className="text-white/30 text-sm">Create your first course to get started</p>
-                <Button variant="primary" size="sm" onClick={() => setCreateCourseModal(true)}>
-                  <MdAdd className="mr-1 inline" /> Create Course
-                </Button>
+                {canManage && (
+                  <Button variant="primary" size="sm" onClick={() => setCreateCourseModal(true)}>
+                    <MdAdd className="mr-1 inline" /> Create Course
+                  </Button>
+                )}
               </GlassCard>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -314,20 +319,22 @@ export default function LmsPage() {
                         >
                           <MdPlayCircle className="mr-1 inline" /> Open
                         </Button>
-                        <button
-                          disabled={togglingId === course.id}
-                          onClick={() => togglePublish(course)}
-                          className={`px-3 py-1 rounded-lg text-xs font-medium border transition ${
-                            course.is_published
-                              ? 'bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20'
-                              : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
-                          }`}
-                          title={course.is_published ? 'Unpublish' : 'Publish'}
-                        >
-                          {course.is_published
-                            ? <MdVisibilityOff className="w-4 h-4" />
-                            : <MdVisibility className="w-4 h-4" />}
-                        </button>
+                        {canManage && (
+                          <button
+                            disabled={togglingId === course.id}
+                            onClick={() => togglePublish(course)}
+                            className={`px-3 py-1 rounded-lg text-xs font-medium border transition ${
+                              course.is_published
+                                ? 'bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20'
+                                : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
+                            }`}
+                            title={course.is_published ? 'Unpublish' : 'Publish'}
+                          >
+                            {course.is_published
+                              ? <MdVisibilityOff className="w-4 h-4" />
+                              : <MdVisibility className="w-4 h-4" />}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </GlassCard>
@@ -354,24 +361,26 @@ export default function LmsPage() {
                   <p className="text-white/50 text-sm">{activeCourse.subject} · {activeCourse.class_name}</p>
                 </div>
               </div>
-              <div className="flex gap-2 flex-wrap">
-                <button
-                  onClick={() => togglePublish(activeCourse)}
-                  disabled={togglingId === activeCourse.id}
-                  className={`flex items-center gap-1 px-4 py-2 rounded-xl text-sm font-medium border transition ${
-                    activeCourse.is_published
-                      ? 'bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20'
-                      : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
-                  }`}
-                >
-                  {activeCourse.is_published
-                    ? <><MdVisibilityOff className="w-4 h-4" /> Unpublish</>
-                    : <><MdVisibility className="w-4 h-4" /> Publish</>}
-                </button>
-                <Button variant="primary" size="sm" onClick={openAddLesson}>
-                  <MdAdd className="mr-1 inline" /> Add Lesson
-                </Button>
-              </div>
+              {canManage && (
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={() => togglePublish(activeCourse)}
+                    disabled={togglingId === activeCourse.id}
+                    className={`flex items-center gap-1 px-4 py-2 rounded-xl text-sm font-medium border transition ${
+                      activeCourse.is_published
+                        ? 'bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20'
+                        : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
+                    }`}
+                  >
+                    {activeCourse.is_published
+                      ? <><MdVisibilityOff className="w-4 h-4" /> Unpublish</>
+                      : <><MdVisibility className="w-4 h-4" /> Publish</>}
+                  </button>
+                  <Button variant="primary" size="sm" onClick={openAddLesson}>
+                    <MdAdd className="mr-1 inline" /> Add Lesson
+                  </Button>
+                </div>
+              )}
             </div>
 
             {/* Course info card */}
@@ -427,20 +436,22 @@ export default function LmsPage() {
                                 )}
                               </div>
                             </div>
-                            <div className="flex gap-2 flex-shrink-0">
-                              <button
-                                onClick={() => openEditLesson(lesson)}
-                                className="p-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 transition"
-                              >
-                                <MdEdit className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteLesson(lesson.id)}
-                                className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition"
-                              >
-                                <MdDelete className="w-4 h-4" />
-                              </button>
-                            </div>
+                            {canManage && (
+                              <div className="flex gap-2 flex-shrink-0">
+                                <button
+                                  onClick={() => openEditLesson(lesson)}
+                                  className="p-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 transition"
+                                >
+                                  <MdEdit className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteLesson(lesson.id)}
+                                  className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition"
+                                >
+                                  <MdDelete className="w-4 h-4" />
+                                </button>
+                              </div>
+                            )}
                           </div>
 
                           {/* Embedded YouTube preview */}

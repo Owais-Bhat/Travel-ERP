@@ -87,7 +87,111 @@ function ToggleGroup({ value, onChange }) {
   );
 }
 
+const SELF_SERVICE_ROLES = ['student', 'parent'];
+
+/** Read-only attendance history for a student/parent login — no marking controls, no other students' data. */
+function MyAttendanceView() {
+  const { profile } = useAuth();
+  const [monthlyData, setMonthlyData] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState(null);
+
+  useEffect(() => {
+    if (!profile?.institution_id) return;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const thirtyDaysAgo = toDateStr(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+        const [{ data: range }, { data: summaryData }] = await Promise.all([
+          api.get('/attendance/range', { params: { from: thirtyDaysAgo, to: TODAY } }),
+          api.get('/attendance/summary'),
+        ]);
+        const grouped = {};
+        (range || []).forEach((rec) => {
+          const count = Number(rec.total) || 0;
+          if (!grouped[rec.date]) grouped[rec.date] = { present: 0, total: 0 };
+          grouped[rec.date].total += count;
+          if (rec.status === 'present') grouped[rec.date].present += count;
+        });
+        setMonthlyData(grouped);
+        setSummary(summaryData);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [profile?.institution_id]);
+
+  const last30Days = getLastNDays(30).reverse();
+
+  return (
+    <MainLayout>
+      <div className="p-6 space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-white">My Attendance</h1>
+          <p className="text-white/50 text-sm mt-1">Last 30 days</p>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <GlassCard className="p-4">
+            <p className="text-white/50 text-xs mb-1 uppercase tracking-wider">Present</p>
+            <p className="text-2xl font-bold text-emerald-400">{summary?.present ?? '—'}</p>
+          </GlassCard>
+          <GlassCard className="p-4">
+            <p className="text-white/50 text-xs mb-1 uppercase tracking-wider">Absent</p>
+            <p className="text-2xl font-bold text-red-400">{summary?.absent ?? '—'}</p>
+          </GlassCard>
+          <GlassCard className="p-4">
+            <p className="text-white/50 text-xs mb-1 uppercase tracking-wider">Late</p>
+            <p className="text-2xl font-bold text-amber-400">{summary?.late ?? '—'}</p>
+          </GlassCard>
+          <GlassCard className="p-4">
+            <p className="text-white/50 text-xs mb-1 uppercase tracking-wider">Attendance %</p>
+            <p className="text-2xl font-bold text-emerald-400">{summary?.attendance_rate ?? 0}%</p>
+          </GlassCard>
+        </div>
+
+        <GlassCard className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-semibold text-white">Last 30 Days</h2>
+            {loading && <div className="w-4 h-4 border border-white/20 border-t-white/50 rounded-full animate-spin" />}
+          </div>
+          <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
+            {last30Days.map((date) => {
+              const day = monthlyData[date];
+              const pct = day && day.total > 0 ? Math.round((day.present / day.total) * 100) : null;
+              const isToday = date === TODAY;
+              let bg = 'bg-white/5';
+              if (pct !== null) {
+                if (pct >= 90) bg = 'bg-emerald-500/30';
+                else bg = 'bg-red-500/20';
+              }
+              return (
+                <div
+                  key={date}
+                  title={`${date}${pct !== null ? (pct >= 90 ? ' — present' : ' — absent/late') : ' — no record'}`}
+                  className={`relative p-1.5 rounded text-center ${bg} ${isToday ? 'ring-1 ring-white/30' : ''}`}
+                >
+                  <p className="text-white/60 text-xs font-medium">{new Date(date + 'T00:00:00').getDate()}</p>
+                </div>
+              );
+            })}
+          </div>
+        </GlassCard>
+      </div>
+    </MainLayout>
+  );
+}
+
 export default function AttendancePage() {
+  const { profile } = useAuth();
+  if (SELF_SERVICE_ROLES.includes(profile?.role)) {
+    return <MyAttendanceView />;
+  }
+  return <AdminAttendanceView />;
+}
+
+function AdminAttendanceView() {
   const { students, loadStudents } = useAppData();
   const { profile } = useAuth();
   const notification = useNotification();

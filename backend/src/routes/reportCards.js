@@ -9,9 +9,10 @@ import { requireAuthenticatedProfile } from '../middleware/auth.js';
 import { requireInstitution } from '../middleware/tenant.js';
 import { requireFeature } from '../middleware/feature.js';
 import { requirePermission } from '../auth/permissions.js';
-import { asyncHandler } from '../lib/errors.js';
+import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
 import { findOwnedOrFail } from '../lib/query.js';
+import { resolveRoleScope } from '../lib/roleScope.js';
 import { z } from '../validation/common.js';
 
 const router = express.Router();
@@ -26,6 +27,14 @@ router.get(
   validate({ params: z.object({ studentId: z.string().uuid() }) }),
   asyncHandler(async (req, res) => {
     const student = await findOwnedOrFail(db, 'students', req.params.studentId, req.institutionId);
+
+    // A student/parent can only ever pull their own (or their child's)
+    // report card — otherwise the studentId in the URL is a straight IDOR.
+    const scope = await resolveRoleScope(req);
+    const isSelfServiceRole = ['student', 'parent'].includes(req.auth.profile.role);
+    if (isSelfServiceRole && !scope?.studentIds.includes(student.id)) {
+      throw ApiError.forbidden('You can only view your own report card.');
+    }
 
     const [results] = await db.execute(
       `SELECT r.marks_obtained, r.grade, r.remarks,

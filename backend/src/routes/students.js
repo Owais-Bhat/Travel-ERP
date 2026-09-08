@@ -81,6 +81,28 @@ async function assertLinkableProfile(institutionId, profileId, expectedRole) {
   }
 }
 
+/**
+ * The caller's own linked record(s) — a student sees their own row, a
+ * parent every child linked to them. No `students.read` permission needed:
+ * this is self-service, not the roster. Used by pages (Report Cards,
+ * Timetable, Homework, ...) that need "my student id" without the search
+ * flow those roles are blocked from anyway.
+ */
+router.get(
+  '/me',
+  asyncHandler(async (req, res) => {
+    const role = req.auth.profile.role;
+    if (!['student', 'parent'].includes(role)) return res.json([]);
+
+    const column = role === 'student' ? 'user_id' : 'parent_user_id';
+    const [rows] = await db.execute(
+      `SELECT * FROM students WHERE ${column} = ? AND institution_id = ?`,
+      [req.auth.profile.id, req.institutionId]
+    );
+    res.json(rows);
+  })
+);
+
 router.get(
   '/',
   requirePermission('students.read'),

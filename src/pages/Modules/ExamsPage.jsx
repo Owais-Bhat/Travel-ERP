@@ -66,6 +66,7 @@ function Modal({ open, onClose, title, children, wide = false }) {
 
 export default function ExamsPage() {
   const { profile } = useAuth();
+  const canManage = !['student', 'parent'].includes(profile?.role);
   const notification = useNotification();
 
   const [activeTab, setActiveTab] = useState('exams'); // 'exams' | 'results'
@@ -344,7 +345,7 @@ export default function ExamsPage() {
         {/* Header */}
         <div className="flex flex-wrap justify-between items-center gap-3">
           <h1 className="text-3xl font-bold text-white">Exams & Results</h1>
-          {activeTab === 'exams' && (
+          {activeTab === 'exams' && canManage && (
             <Button variant="primary" size="sm" onClick={() => setCreateModal(true)}>
               <MdAdd className="mr-1 inline" /> Create Exam
             </Button>
@@ -427,7 +428,7 @@ export default function ExamsPage() {
                         <th className="text-center py-3 px-4 text-white/60 font-medium">Total Marks</th>
                         <th className="text-center py-3 px-4 text-white/60 font-medium">Pass Marks</th>
                         <th className="text-left py-3 px-4 text-white/60 font-medium">Status</th>
-                        <th className="text-center py-3 px-4 text-white/60 font-medium">Actions</th>
+                        {canManage && <th className="text-center py-3 px-4 text-white/60 font-medium">Actions</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -444,14 +445,16 @@ export default function ExamsPage() {
                               {exam.status}
                             </span>
                           </td>
-                          <td className="py-3 px-4 text-center">
-                            <button
-                              onClick={() => { setStatusModal(exam); setNewStatus(exam.status); }}
-                              className="text-amber-400 hover:text-amber-300 transition text-xs flex items-center gap-1 mx-auto"
-                            >
-                              <MdUpdate className="w-4 h-4" /> Status
-                            </button>
-                          </td>
+                          {canManage && (
+                            <td className="py-3 px-4 text-center">
+                              <button
+                                onClick={() => { setStatusModal(exam); setNewStatus(exam.status); }}
+                                className="text-amber-400 hover:text-amber-300 transition text-xs flex items-center gap-1 mx-auto"
+                              >
+                                <MdUpdate className="w-4 h-4" /> Status
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -485,7 +488,7 @@ export default function ExamsPage() {
                     ))}
                   </select>
                 </div>
-                {selectedExam && (
+                {selectedExam && canManage && (
                   <Button variant="primary" size="sm" onClick={openEnterResults}>
                     <MdEditNote className="mr-1 inline" /> Enter / Update Results
                   </Button>
@@ -558,9 +561,11 @@ export default function ExamsPage() {
               <GlassCard className="p-12 flex flex-col items-center gap-3">
                 <MdEditNote className="w-12 h-12 text-white/20" />
                 <p className="text-white/50 text-lg">No results entered yet</p>
-                <Button variant="primary" size="sm" onClick={openEnterResults}>
-                  <MdEditNote className="mr-1 inline" /> Enter Results
-                </Button>
+                {canManage && (
+                  <Button variant="primary" size="sm" onClick={openEnterResults}>
+                    <MdEditNote className="mr-1 inline" /> Enter Results
+                  </Button>
+                )}
               </GlassCard>
             ) : (
               <GlassCard className="p-0 overflow-hidden">

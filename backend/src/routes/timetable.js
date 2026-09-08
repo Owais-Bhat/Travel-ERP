@@ -26,16 +26,31 @@ router.use(requireFeature('timetable'));
 
 router.get(
   '/',
-  requirePermission('students.read'),
+  requirePermission('attendance.read'),
   validate({ query: z.object({ class_name: z.string().min(1).max(50), section: z.string().max(20).optional() }) }),
   asyncHandler(async (req, res) => {
+    // A student/parent can only ever see their own (or their child's) class
+    // timetable — the requested class_name/section is overridden, not just
+    // validated, so they can't browse another class's schedule.
+    let className = req.query.class_name;
+    let section = req.query.section || '';
+    if (['student', 'parent'].includes(req.auth.profile.role)) {
+      const column = req.auth.profile.role === 'student' ? 'user_id' : 'parent_user_id';
+      const [[own]] = await db.execute(
+        `SELECT class_name, section FROM students WHERE ${column} = ? AND institution_id = ? LIMIT 1`,
+        [req.auth.profile.id, req.institutionId]
+      );
+      className = own?.class_name || '__none__';
+      section = own?.section || '';
+    }
+
     const [rows] = await db.execute(
       `SELECT s.*, t.first_name AS teacher_first_name, t.last_name AS teacher_last_name
          FROM timetable_slots s
          LEFT JOIN teachers t ON t.id = s.teacher_id
         WHERE s.institution_id = ? AND s.class_name = ? AND s.section = ?
         ORDER BY s.day_of_week, s.period_number`,
-      [req.institutionId, req.query.class_name, req.query.section || '']
+      [req.institutionId, className, section]
     );
     res.json(rows);
   })

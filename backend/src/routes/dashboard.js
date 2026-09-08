@@ -1,17 +1,11 @@
 import express from 'express';
 import db from '../lib/db.js';
 import { requireAuthenticatedProfile } from '../middleware/auth.js';
-import { resolveRoleScope } from '../lib/roleScope.js';
+import { resolveRoleScope, inClause } from '../lib/roleScope.js';
 
 const router = express.Router();
 
 router.use(requireAuthenticatedProfile);
-
-/** `IN (?, ?, ...)` for a values array, or a clause that matches nothing for an empty one — MySQL rejects `IN ()`. */
-function inClause(column, values) {
-  if (!values || values.length === 0) return { sql: '1 = 0', params: [] };
-  return { sql: `${column} IN (${values.map(() => '?').join(',')})`, params: values };
-}
 
 // Get Dashboard Stats
 router.get('/stats', async (req, res) => {

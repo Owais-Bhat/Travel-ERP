@@ -16,6 +16,7 @@ import { requirePermission } from '../auth/permissions.js';
 import { recordAuditEvent } from '../lib/audit.js';
 import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
+import { resolveRoleScope, inClause } from '../lib/roleScope.js';
 import {
   parsePagination, parseSort, buildWhere, paginatedQuery, findOwnedOrFail,
   buildUpdate, nextSequenceNo,
@@ -313,6 +314,13 @@ router.get(
       'created_at'
     );
 
+    // A student/parent only ever sees their own (or their child's)
+    // application — this row carries family income, academic %, and a
+    // personal statement, not something `scholarships.read` alone should
+    // expose institution-wide.
+    const scope = await resolveRoleScope(req);
+    const raw = scope ? [inClause('a.student_id', scope.studentIds)] : [];
+
     const { clause, params } = buildWhere({
       alias: 'a',
       equals: {
@@ -323,6 +331,7 @@ router.get(
       },
       search: req.query.search,
       searchColumns: ['applicant_name', 'email', 'application_no'],
+      raw,
     });
 
     const result = await paginatedQuery(db, {

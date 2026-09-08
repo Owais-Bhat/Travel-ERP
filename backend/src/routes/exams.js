@@ -20,6 +20,7 @@ import {
 } from '../lib/query.js';
 import { z, optionalText, longText, isoDate, listQuery, idParam, partialUpdate } from '../validation/common.js';
 import { getFeeClearance, getFeeClearanceMap } from '../lib/feeClearance.js';
+import { resolveRoleScope, inClause } from '../lib/roleScope.js';
 
 const router = express.Router();
 
@@ -54,6 +55,11 @@ router.get(
     const { page, pageSize, offset } = parsePagination(req.query);
     const sort = parseSort(req.query, SORTABLE, 'exam_date');
 
+    // A teacher/student/parent only ever sees exams for their own class(es) —
+    // narrows the query regardless of what class_name filter was requested.
+    const scope = await resolveRoleScope(req);
+    const raw = scope ? [inClause('class_name', scope.classNames)] : [];
+
     const { clause, params } = buildWhere({
       equals: {
         institution_id: req.institutionId,
@@ -62,6 +68,7 @@ router.get(
       },
       search: req.query.search,
       searchColumns: ['title', 'subject', 'class_name'],
+      raw,
     });
 
     const result = await paginatedQuery(db, {
@@ -167,13 +174,24 @@ router.get(
     // Confirms the exam belongs to this tenant before exposing any marks.
     await findOwnedOrFail(db, 'exams', req.params.id, req.institutionId);
 
+    // A student/parent gets only their own (or their child's) result, not
+    // every classmate's marks — `exams.read` alone doesn't imply that.
+    const scope = await resolveRoleScope(req);
+    const conditions = ['r.exam_id = ?'];
+    const params = [req.params.id];
+    if (scope && req.auth.profile.role !== 'teacher') {
+      const clause = inClause('r.student_id', scope.studentIds);
+      conditions.push(clause.sql);
+      params.push(...clause.params);
+    }
+
     const [rows] = await db.execute(
       `SELECT r.*, s.first_name, s.last_name, s.admission_no
          FROM exam_results r
          JOIN students s ON s.id = r.student_id
-        WHERE r.exam_id = ?
+        WHERE ${conditions.join(' AND ')}
         ORDER BY s.first_name, s.last_name`,
-      [req.params.id]
+      params
     );
     res.json(rows);
   })

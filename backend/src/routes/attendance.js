@@ -15,6 +15,7 @@ import { requirePermission } from '../auth/permissions.js';
 import { recordAuditEvent } from '../lib/audit.js';
 import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
+import { resolveRoleScope, inClause } from '../lib/roleScope.js';
 import { z, optionalText } from '../validation/common.js';
 
 const router = express.Router();
@@ -39,6 +40,19 @@ router.get(
       params.push(req.query.class_name);
     }
 
+    // A teacher/student/parent can only ever see their own classes/records,
+    // regardless of what class_name they pass — the scope narrows the query,
+    // it never widens past what the admin unscoped view already allowed.
+    const scope = await resolveRoleScope(req);
+    if (scope) {
+      const role = req.auth.profile.role;
+      const clause = role === 'teacher'
+        ? inClause('a.class_name', scope.classNames)
+        : inClause('a.student_id', scope.studentIds);
+      conditions.push(clause.sql);
+      params.push(...clause.params);
+    }
+
     const [rows] = await db.execute(
       `SELECT a.*, s.first_name, s.last_name, s.admission_no
          FROM attendance a
@@ -58,13 +72,24 @@ router.get(
   asyncHandler(async (req, res) => {
     if (req.query.from > req.query.to) throw ApiError.badRequest('"from" must not be after "to".');
 
+    const conditions = ['institution_id = ?', 'date BETWEEN ? AND ?'];
+    const params = [req.institutionId, req.query.from, req.query.to];
+
+    const scope = await resolveRoleScope(req);
+    if (scope) {
+      const role = req.auth.profile.role;
+      const clause = role === 'teacher' ? inClause('class_name', scope.classNames) : inClause('student_id', scope.studentIds);
+      conditions.push(clause.sql);
+      params.push(...clause.params);
+    }
+
     const [rows] = await db.execute(
       `SELECT date, status, COUNT(*) AS total
          FROM attendance
-        WHERE institution_id = ? AND date BETWEEN ? AND ?
+        WHERE ${conditions.join(' AND ')}
         GROUP BY date, status
         ORDER BY date`,
-      [req.institutionId, req.query.from, req.query.to]
+      params
     );
     res.json(rows);
   })
@@ -79,14 +104,25 @@ router.get(
     const from = req.query.from
       || new Date(Date.now() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
+    const conditions = ['institution_id = ?', 'date BETWEEN ? AND ?'];
+    const params = [req.institutionId, from, to];
+
+    const scope = await resolveRoleScope(req);
+    if (scope) {
+      const role = req.auth.profile.role;
+      const clause = role === 'teacher' ? inClause('class_name', scope.classNames) : inClause('student_id', scope.studentIds);
+      conditions.push(clause.sql);
+      params.push(...clause.params);
+    }
+
     const [[totals]] = await db.execute(
       `SELECT COUNT(*) AS records,
               SUM(status = 'present') AS present,
               SUM(status = 'absent')  AS absent,
               SUM(status = 'late')    AS late
          FROM attendance
-        WHERE institution_id = ? AND date BETWEEN ? AND ?`,
-      [req.institutionId, from, to]
+        WHERE ${conditions.join(' AND ')}`,
+      params
     );
 
     const records = Number(totals.records) || 0;

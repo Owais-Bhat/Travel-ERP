@@ -16,6 +16,7 @@ import { requirePermission } from '../auth/permissions.js';
 import { recordAuditEvent } from '../lib/audit.js';
 import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
+import { resolveRoleScope, inClause } from '../lib/roleScope.js';
 import {
   parsePagination, parseSort, buildWhere, paginatedQuery, findOwnedOrFail,
   buildUpdate, nextSequenceNo,
@@ -101,6 +102,9 @@ router.get(
     const { page, pageSize, offset } = parsePagination(req.query);
     const sort = parseSort(req.query, ['created_at', 'issued_on', 'title', 'status'], 'created_at');
 
+    const scope = await resolveRoleScope(req);
+    const raw = scope ? [inClause('c.student_id', scope.studentIds)] : [];
+
     const { clause, params } = buildWhere({
       alias: 'c',
       equals: {
@@ -111,6 +115,7 @@ router.get(
       },
       search: req.query.search,
       searchColumns: ['title', 'certificate_no', 'verification_code'],
+      raw,
     });
 
     const result = await paginatedQuery(db, {

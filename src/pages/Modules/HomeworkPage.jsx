@@ -15,9 +15,12 @@ const EMPTY_FORM = { class_name: '', section: '', subject: '', title: '', descri
 export default function HomeworkPage() {
   const { profile } = useAuth();
   const notification = useNotification();
+  const isStudent = profile?.role === 'student';
+  const canManage = !['student', 'parent'].includes(profile?.role);
 
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [myStudentId, setMyStudentId] = useState(null);
 
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -26,6 +29,13 @@ export default function HomeworkPage() {
   const [viewing, setViewing] = useState(null);
   const [submissions, setSubmissions] = useState([]);
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
+  const [mySubmission, setMySubmission] = useState({ note: '', link: '' });
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!isStudent) return;
+    api.get('/students/me').then(({ data }) => setMyStudentId(data?.[0]?.id || null)).catch(() => {});
+  }, [isStudent]);
 
   const loadHomework = async () => {
     if (!profile?.institution_id) return;
@@ -77,10 +87,27 @@ export default function HomeworkPage() {
     try {
       const { data } = await api.get(`/homework/${item.id}/submissions`);
       setSubmissions(data || []);
+      const mine = (data || []).find((s) => s.student_id === myStudentId);
+      setMySubmission({ note: mine?.note || '', link: mine?.link || '' });
     } catch (err) {
       notification.error(err.response?.data?.error || 'Failed to load submissions');
     } finally {
       setSubmissionsLoading(false);
+    }
+  };
+
+  const handleSubmitMine = async () => {
+    if (!myStudentId) { notification.error('Your account is not linked to a student record yet.'); return; }
+    setSubmitting(true);
+    try {
+      await api.post(`/homework/${viewing.id}/submissions`, { student_id: myStudentId, ...mySubmission });
+      notification.success('Submitted!');
+      setViewing(null);
+      loadHomework();
+    } catch (err) {
+      notification.error(err.response?.data?.error || 'Failed to submit');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -99,9 +126,11 @@ export default function HomeworkPage() {
       <div className="p-6 space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-white">Homework & Assignments</h1>
-          <Button variant="primary" onClick={() => setShowModal(true)}>
-            <MdAdd className="inline mr-1" /> Post Homework
-          </Button>
+          {canManage && (
+            <Button variant="primary" onClick={() => setShowModal(true)}>
+              <MdAdd className="inline mr-1" /> Post Homework
+            </Button>
+          )}
         </div>
 
         {loading ? (
@@ -116,17 +145,19 @@ export default function HomeworkPage() {
                 <GlassCard key={item.id} className="p-5">
                   <div className="flex justify-between items-start mb-2">
                     <h3 className="text-white font-bold">{item.title}</h3>
-                    <button onClick={() => handleDelete(item)} className="text-red-400/60 hover:text-red-400 transition">
-                      <MdDelete className="w-4 h-4" />
-                    </button>
+                    {canManage && (
+                      <button onClick={() => handleDelete(item)} className="text-red-400/60 hover:text-red-400 transition">
+                        <MdDelete className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                   <p className="text-white/50 text-sm mb-1">Class {item.class_name}{item.section ? ` ${item.section}` : ''} {item.subject ? `· ${item.subject}` : ''}</p>
                   {item.description && <p className="text-white/60 text-sm mb-2 line-clamp-2">{item.description}</p>}
                   <p className={`text-xs font-semibold mb-3 ${overdue ? 'text-red-400' : 'text-white/50'}`}>Due {formatDate(item.due_date)}</p>
                   <div className="flex items-center justify-between pt-3 border-t border-white/5">
-                    <span className="text-white/50 text-xs">{item.submission_count} submission(s)</span>
-                    <button onClick={() => openSubmissions(item)} className="text-blue-400 hover:text-blue-300 text-xs font-semibold inline-flex items-center gap-1">
-                      <MdVisibility className="w-4 h-4" /> View
+                    {canManage && <span className="text-white/50 text-xs">{item.submission_count} submission(s)</span>}
+                    <button onClick={() => openSubmissions(item)} className="text-blue-400 hover:text-blue-300 text-xs font-semibold inline-flex items-center gap-1 ml-auto">
+                      <MdVisibility className="w-4 h-4" /> {isStudent ? 'My Submission' : 'View'}
                     </button>
                   </div>
                 </GlassCard>
@@ -179,6 +210,15 @@ export default function HomeworkPage() {
               </div>
               {submissionsLoading ? (
                 <p className="text-white/50 text-center py-6">Loading...</p>
+              ) : isStudent ? (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-white/60 text-sm mb-1.5">Note</label>
+                    <textarea className="input-glass w-full" rows={3} value={mySubmission.note} onChange={e => setMySubmission(f => ({ ...f, note: e.target.value }))} />
+                  </div>
+                  <Input label="Link (optional)" placeholder="https://..." value={mySubmission.link} onChange={e => setMySubmission(f => ({ ...f, link: e.target.value }))} />
+                  <Button variant="primary" loading={submitting} onClick={handleSubmitMine}>Submit</Button>
+                </div>
               ) : submissions.length === 0 ? (
                 <p className="text-white/40 text-center py-6">No submissions yet.</p>
               ) : (

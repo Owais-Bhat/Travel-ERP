@@ -48,4 +48,10 @@ export async function resolveRoleScope(req) {
   return { studentIds: [], classNames: [], teacherRowId: null };
 }
 
+/** `IN (?, ?, ...)` for a values array, or a clause that matches nothing for an empty one — MySQL rejects `IN ()`. */
+export function inClause(column, values) {
+  if (!values || values.length === 0) return { sql: '1 = 0', params: [] };
+  return { sql: `${column} IN (${values.map(() => '?').join(',')})`, params: values };
+}
+
 export default resolveRoleScope;
