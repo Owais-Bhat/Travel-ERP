@@ -16,6 +16,7 @@ import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
 import { findOwnedOrFail } from '../lib/query.js';
 import { z, optionalText, isoDate, idParam } from '../validation/common.js';
+import { resolveRoleScope, inClause } from '../lib/roleScope.js';
 
 const router = express.Router();
 
@@ -45,6 +46,15 @@ router.get(
     const params = [req.institutionId];
     if (teacher_id) { conditions.push('p.teacher_id = ?'); params.push(teacher_id); }
     if (open === 'true') { conditions.push("p.status = 'open'"); }
+
+    // A student/parent sees open (bookable) slots plus their own booking —
+    // not every other family's booked slot with a teacher.
+    const scope = await resolveRoleScope(req);
+    if (scope && req.auth.profile.role !== 'teacher') {
+      const own = inClause('p.student_id', scope.studentIds);
+      conditions.push(`(p.status = 'open' OR (${own.sql}))`);
+      params.push(...own.params);
+    }
 
     const [rows] = await db.execute(
       `SELECT p.*, t.first_name AS teacher_first_name, t.last_name AS teacher_last_name,

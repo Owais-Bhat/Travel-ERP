@@ -14,6 +14,7 @@ import { requirePermission } from '../auth/permissions.js';
 import { recordAuditEvent } from '../lib/audit.js';
 import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
+import { resolveRoleScope, inClause } from '../lib/roleScope.js';
 import {
   parsePagination, parseSort, buildWhere, paginatedQuery, findOwnedOrFail,
   buildUpdate, nextSequenceNo,
@@ -79,6 +80,15 @@ router.get(
     const raw = [];
     if (req.query.overdue) {
       raw.push({ sql: "f.`due_date` IS NOT NULL AND f.`due_date` < CURDATE() AND f.`status` NOT IN ('paid','waived','cancelled')" });
+    }
+
+    // A student/parent only ever sees their own (or their child's) fee
+    // records — this is financial data, not something `fees.read` alone
+    // should expose institution-wide.
+    const scope = await resolveRoleScope(req);
+    if (scope) {
+      const clause = inClause('f.student_id', scope.studentIds);
+      raw.push(clause);
     }
 
     const { clause, params } = buildWhere({

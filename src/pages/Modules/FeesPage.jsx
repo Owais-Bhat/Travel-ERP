@@ -75,6 +75,7 @@ function Modal({ open, onClose, title, children, wide = false }) {
 
 export default function FeesPage() {
   const { profile } = useAuth();
+  const canManage = !['student', 'parent'].includes(profile?.role);
   const notification = useNotification();
 
   // data state
@@ -272,12 +273,16 @@ export default function FeesPage() {
         <div className="flex flex-wrap justify-between items-center gap-3">
           <h1 className="text-3xl font-bold text-white">Fees Management</h1>
           <div className="flex gap-2 flex-wrap">
-            <Button variant="secondary" size="sm" onClick={exportCSV}>
-              <MdDownload className="mr-1 inline" /> Export CSV
-            </Button>
-            <Button variant="primary" size="sm" onClick={() => setAddModal(true)}>
-              <MdAdd className="mr-1 inline" /> Add Fee
-            </Button>
+            {canManage && (
+              <>
+                <Button variant="secondary" size="sm" onClick={exportCSV}>
+                  <MdDownload className="mr-1 inline" /> Export CSV
+                </Button>
+                <Button variant="primary" size="sm" onClick={() => setAddModal(true)}>
+                  <MdAdd className="mr-1 inline" /> Add Fee
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
@@ -399,7 +404,7 @@ export default function FeesPage() {
                           </span>
                         </td>
                         <td className="py-3 px-4 text-center">
-                          {effStatus !== 'paid' && (
+                          {canManage && effStatus !== 'paid' && (
                             <button
                               onClick={() => openPayModal(fee)}
                               className="text-blue-400 hover:text-blue-300 transition flex items-center gap-1 mx-auto text-xs"
