@@ -40,7 +40,11 @@ export const env = {
     user: process.env.MYSQL_USER || 'root',
     password: process.env.MYSQL_PASSWORD || '',
     database: process.env.MYSQL_DATABASE || 'cybermilo',
-    connectionLimit: int(process.env.MYSQL_POOL_SIZE, 10),
+    // 20 by default — 10 was too tight once concurrent traffic started
+    // queuing behind it. Check the MySQL server's own `max_connections`
+    // before raising this further; shared hosting plans often cap it well
+    // below what a single busy tenant could otherwise request.
+    connectionLimit: int(process.env.MYSQL_POOL_SIZE, 20),
   },
 
   uploads: {
