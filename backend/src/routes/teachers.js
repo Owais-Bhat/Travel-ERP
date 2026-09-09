@@ -21,11 +21,26 @@ import {
 import {
   z, optionalText, isoDate, listQuery, idParam, email, phone, partialUpdate, optionalUuid,
 } from '../validation/common.js';
+import { resolveRoleScope } from '../lib/roleScope.js';
 
 const router = express.Router();
 
 router.use(requireAuthenticatedProfile);
 router.use(requireInstitution);
+
+/**
+ * The caller's own linked faculty record and class names — used by pages
+ * (Attendance, ...) that need to restrict a teacher to their own class(es)
+ * without a `students.read`-style roster permission.
+ */
+router.get(
+  '/me',
+  asyncHandler(async (req, res) => {
+    if (req.auth.profile.role !== 'teacher') return res.json({ teacherId: null, classNames: [] });
+    const scope = await resolveRoleScope(req);
+    res.json({ teacherId: scope?.teacherRowId || null, classNames: scope?.classNames || [] });
+  })
+);
 
 const SORTABLE = ['created_at', 'first_name', 'last_name', 'employee_id', 'department', 'status'];
 const UPDATABLE = [

@@ -213,6 +213,15 @@ function AdminAttendanceView() {
   const [monthlyData, setMonthlyData] = useState({});
   const [loadingMonthly, setLoadingMonthly] = useState(false);
 
+  // A teacher is restricted to their own class(es) — fetched once so the
+  // class picker and roster below can't be widened to another class.
+  const isTeacher = profile?.role === 'teacher';
+  const [myClassNames, setMyClassNames] = useState(null);
+  useEffect(() => {
+    if (!isTeacher) { setMyClassNames([]); return; }
+    api.get('/teachers/me').then(({ data }) => setMyClassNames(data.classNames || [])).catch(() => setMyClassNames([]));
+  }, [isTeacher]);
+
   // Load students once
   useEffect(() => {
     const load = async () => {
@@ -316,10 +325,13 @@ function AdminAttendanceView() {
     }
   };
 
-  // Derived: unique class names
-  const classOptions = [...new Set((students || []).map((s) => s.class_name).filter(Boolean))].sort();
+  // Derived: unique class names — a teacher only ever sees their own.
+  const scopedStudents = isTeacher && myClassNames
+    ? (students || []).filter((s) => myClassNames.includes(s.class_name))
+    : (students || []);
+  const classOptions = [...new Set(scopedStudents.map((s) => s.class_name).filter(Boolean))].sort();
 
-  const displayedStudents = (students || []).filter(
+  const displayedStudents = scopedStudents.filter(
     (s) => !classFilter || s.class_name === classFilter
   );
 
