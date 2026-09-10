@@ -19,6 +19,24 @@ export default function RoleGate({ path, children }) {
     );
   }
 
+  // The static per-role list is available immediately and covers most
+  // routes — check that first so a normal page doesn't wait on anything.
+  // Only a route the static list DOESN'T cover needs `institution` (an
+  // admin-granted extra beyond the role's baseline, see canAccessPath),
+  // and that loads asynchronously right after the profile resolves — on a
+  // hard reload/direct link there's a real window where it's still null
+  // even though the tenant genuinely granted this route. Wait for it
+  // rather than redirect away from a page the admin just enabled.
+  if (canAccessPath(role, routePath)) {
+    return children;
+  }
+  if (!institution && profile?.institution_id) {
+    return (
+      <div className="min-h-screen bg-[#F7F8FB] flex items-center justify-center">
+        <p className="text-slate-500">Loading permissions...</p>
+      </div>
+    );
+  }
   if (canAccessPath(role, routePath, institution)) {
     return children;
   }
