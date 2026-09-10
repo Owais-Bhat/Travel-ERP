@@ -162,3 +162,27 @@ Body:
   "reason": "Payment overdue"
 }
 ```
+
+## Scaling past one process
+
+A single instance is the right default and needs nothing below. Move to
+more than one process (a VPS/dedicated server, not a managed Node host like
+Hostinger's own app panel, which runs `npm start` itself) once traffic
+outgrows one CPU core:
+
+1. **Run multiple instances with PM2:**
+   ```bash
+   npm install -g pm2
+   pm2 start ecosystem.config.cjs
+   ```
+   `PM2_INSTANCES` env var picks the worker count (defaults to one per CPU core).
+
+2. **Point rate limiting at Redis** so every instance shares the same
+   counters instead of each keeping its own (see `lib/redis.js`):
+   ```text
+   REDIS_URL=redis://localhost:6379
+   ```
+
+3. Put a load balancer (Nginx/HAProxy) in front of the instances, and raise
+   `MYSQL_POOL_SIZE` to match — check the MySQL server's own
+   `max_connections` first.

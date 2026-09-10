@@ -59,6 +59,12 @@ export const env = {
     authMax: int(process.env.RATE_LIMIT_AUTH_MAX, 20),
   },
 
+  // Unset by default — rate limiting then falls back to per-process memory,
+  // which is correct for a single instance. Set this once the app runs as
+  // more than one process/instance (PM2 cluster mode, multiple servers
+  // behind a load balancer), so every instance shares the same counters.
+  redisUrl: process.env.REDIS_URL || '',
+
   trustProxy: process.env.TRUST_PROXY || (process.env.NODE_ENV === 'production' ? '1' : false),
   logFormat: process.env.LOG_FORMAT || (process.env.NODE_ENV === 'production' ? 'combined' : 'dev'),
 

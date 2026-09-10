@@ -5,10 +5,12 @@ import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
+import { RedisStore } from 'rate-limit-redis';
 import express from 'express';
 
 import { env, verifyEnv } from './lib/env.js';
 import { pingDatabase } from './lib/db.js';
+import { redisClient } from './lib/redis.js';
 import { errorHandler, notFoundHandler } from './lib/errors.js';
 
 import adminRouter from './routes/admin.js';
@@ -105,12 +107,19 @@ app.use('/uploads', express.static(uploadsDir, {
   maxAge: '1d',
 }));
 
+// Only meaningful once the app runs as more than one process (PM2 cluster
+// mode, multiple servers behind a load balancer) — a single instance's own
+// memory is otherwise correct and needs nothing extra. See lib/redis.js.
+const sharedStore = (prefix) =>
+  redisClient ? { store: new RedisStore({ prefix, sendCommand: (...args) => redisClient.call(...args) }) } : {};
+
 const apiLimiter = rateLimit({
   windowMs: env.rateLimit.windowMs,
   max: env.rateLimit.max,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: { error: 'Too many requests. Slow down and try again shortly.' },
+  ...sharedStore('rl:api:'),
 });
 
 // Credential endpoints get a much tighter budget than the rest of the API.
@@ -121,6 +130,7 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
   skipSuccessfulRequests: true,
   message: { error: 'Too many authentication attempts. Try again later.' },
+  ...sharedStore('rl:auth:'),
 });
 
 app.get('/health', async (req, res) => {
