@@ -35,11 +35,19 @@ export function AppDataProvider({ children }) {
     const bootstrap = async () => {
       setIsLoading(true);
       try {
+        // Student/parent are self-service roles — they never browse the full
+        // roster, and neither role's `students` SaaS feature is normally
+        // granted, so skip these three instead of firing requests that just
+        // 403 on every page load. Any role that legitimately lacks access
+        // (a further-restricted teacher/staff, say) still fails safely —
+        // each loader is caught individually below rather than left to
+        // reject the whole Promise.all as an unhandled rejection.
+        const skipRoster = profile?.role === 'student' || profile?.role === 'parent';
         await Promise.all([
-          _loadInstitution(),
-          _loadStudents(),
-          _loadTeachers(),
-          _loadClasses(),
+          _loadInstitution().catch(() => {}),
+          skipRoster ? Promise.resolve() : _loadStudents().catch(() => {}),
+          skipRoster ? Promise.resolve() : _loadTeachers().catch(() => {}),
+          skipRoster ? Promise.resolve() : _loadClasses().catch(() => {}),
         ]);
       } finally {
         setIsLoading(false);
@@ -48,7 +56,7 @@ export function AppDataProvider({ children }) {
 
     bootstrap();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.institution_id]);
+  }, [profile?.institution_id, profile?.role]);
 
   // ============================================================
   // Private loaders (used inside the provider only)
