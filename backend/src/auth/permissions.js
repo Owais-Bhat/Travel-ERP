@@ -155,3 +155,26 @@ export function requirePermission(...required) {
     ));
   };
 }
+
+/**
+ * Blocks specific roles outright, regardless of `requirePermission`.
+ *
+ * A handful of admin-only writes (create/delete a scholarship scheme, post
+ * an institution-wide announcement) share their permission key —
+ * `scholarships.write`, `communication.write` — with a self-service action
+ * a student/parent legitimately needs (apply to a scheme, message a
+ * teacher). Splitting those into separate permission keys is the proper
+ * long-term fix; this is the narrow stopgap so the self-service grant
+ * doesn't also open the admin-only route. Must run after
+ * `requireAuthenticatedProfile`.
+ */
+export function denyRoles(...roles) {
+  const blocked = new Set(roles.flat());
+  return (req, res, next) => {
+    const role = req.auth?.profile?.role;
+    if (role && blocked.has(role)) {
+      return next(ApiError.forbidden('This action is not available to your role.', { code: 'missing_permission' }));
+    }
+    return next();
+  };
+}

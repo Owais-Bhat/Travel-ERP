@@ -23,6 +23,10 @@ const PRIORITY_STYLES = {
 export default function CommunicationPage() {
   const { profile } = useAuth();
   const notification = useNotification();
+  // Posting an institution-wide announcement is an admin/staff/teacher
+  // action; students and parents only ever message someone directly (see
+  // denyRoles on POST /communication/announcements for the backend side).
+  const canAnnounce = !['student', 'parent'].includes(profile?.role);
 
   // Tab state
   const [activeTab, setActiveTab] = useState('announcements');
@@ -262,9 +266,11 @@ export default function CommunicationPage() {
               <h2 className="text-xl font-bold text-white flex items-center gap-2">
                 <MdCampaign className="text-neon-cyan" /> Announcements
               </h2>
-              <Button variant="primary" size="sm" onClick={() => setShowAnnForm(!showAnnForm)}>
-                <MdAdd className="inline mr-1" /> New Announcement
-              </Button>
+              {canAnnounce && (
+                <Button variant="primary" size="sm" onClick={() => setShowAnnForm(!showAnnForm)}>
+                  <MdAdd className="inline mr-1" /> New Announcement
+                </Button>
+              )}
             </div>
 
             {showAnnForm && (

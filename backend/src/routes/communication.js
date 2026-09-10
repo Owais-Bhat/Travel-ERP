@@ -11,7 +11,7 @@ import db, { withTransaction } from '../lib/db.js';
 import { requireAuthenticatedProfile } from '../middleware/auth.js';
 import { requireInstitution } from '../middleware/tenant.js';
 import { requireFeature } from '../middleware/feature.js';
-import { requirePermission } from '../auth/permissions.js';
+import { requirePermission, denyRoles } from '../auth/permissions.js';
 import { recordAuditEvent } from '../lib/audit.js';
 import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
@@ -88,6 +88,7 @@ const announcementSchema = z.object({
 router.post(
   '/announcements',
   requirePermission('communication.write'),
+  denyRoles('student', 'parent'),
   validate({ body: announcementSchema }),
   asyncHandler(async (req, res) => {
     const body = req.body;

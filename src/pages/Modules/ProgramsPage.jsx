@@ -16,6 +16,7 @@ import Badge from '../../components/Common/Badge';
 import { Reveal, Stagger, StaggerItem } from '../../components/Common/Motion';
 import { useResource, useEndpoint } from '../../hooks/useResource';
 import { useNotification } from '../../hooks/useNotification';
+import { useAuth } from '../../hooks/useAuth';
 import api from '../../lib/api';
 
 const LEVELS = ['certificate', 'diploma', 'undergraduate', 'postgraduate', 'doctorate', 'short_course'];
@@ -35,6 +36,11 @@ const titleCase = (value) => String(value || '').replace(/_/g, ' ').replace(/^./
 
 export default function ProgramsPage() {
   const notification = useNotification();
+  const { profile } = useAuth();
+  // Only self-service roles (view their own program) are excluded — every
+  // other role that reaches this page already has `programs.write` and can
+  // manage the catalog.
+  const canManage = !['student', 'parent'].includes(profile?.role);
 
   const [levelFilter, setLevelFilter] = useState('');
   const programs = useResource('/programs', { params: levelFilter ? { level: levelFilter } : {} });
@@ -194,7 +200,7 @@ export default function ProgramsPage() {
       key: 'actions',
       label: '',
       align: 'right',
-      render: (row) => (
+      render: (row) => !canManage ? null : (
         <div className="flex gap-1 justify-end">
           <Button
             size="xs"
@@ -224,7 +230,7 @@ export default function ProgramsPage() {
           title="Programs & Courses"
           subtitle="Degrees, diplomas and certificate tracks, and the courses inside them"
           icon={MdBook}
-          actions={<Button variant="primary" icon={MdAdd} onClick={() => openEditor()}>New program</Button>}
+          actions={canManage && <Button variant="primary" icon={MdAdd} onClick={() => openEditor()}>New program</Button>}
         />
 
         <Stagger className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -267,7 +273,7 @@ export default function ProgramsPage() {
               icon: MdSchool,
               title: 'No programs yet',
               description: 'Programs are what admissions, scholarships and certifications all hang off.',
-              action: <Button variant="primary" icon={MdAdd} onClick={() => openEditor()}>New program</Button>,
+              action: canManage && <Button variant="primary" icon={MdAdd} onClick={() => openEditor()}>New program</Button>,
             }}
           />
         </Reveal>
@@ -405,27 +411,29 @@ export default function ProgramsPage() {
               )}
             </div>
 
-            <Surface variant="flat" className="!p-4 space-y-3">
-              <p className="text-sm font-semibold mb-0" style={{ color: 'var(--neu-ink)' }}>
-                <MdLibraryBooks className="inline w-4 h-4 mr-1.5" />
-                Add a course
-              </p>
-              <div className="grid sm:grid-cols-2 gap-3">
-                <Input wrapperClass="mb-0" value={courseForm.title} onChange={(e) => setCourseForm((f) => ({ ...f, title: e.target.value }))} placeholder="Course title" />
-                <Input wrapperClass="mb-0" value={courseForm.code} onChange={(e) => setCourseForm((f) => ({ ...f, code: e.target.value }))} placeholder="Code" />
-                <Input wrapperClass="mb-0" value={courseForm.subject} onChange={(e) => setCourseForm((f) => ({ ...f, subject: e.target.value }))} placeholder="Subject" />
-                <Select
-                  wrapperClass="mb-0"
-                  value={courseForm.teacher_id}
-                  onChange={(e) => setCourseForm((f) => ({ ...f, teacher_id: e.target.value }))}
-                  placeholder="Unassigned"
-                  options={teacherOptions}
-                />
-                <Input wrapperClass="mb-0" type="number" value={courseForm.credits} onChange={(e) => setCourseForm((f) => ({ ...f, credits: e.target.value }))} placeholder="Credits" />
-                <Input wrapperClass="mb-0" type="number" value={courseForm.semester} onChange={(e) => setCourseForm((f) => ({ ...f, semester: e.target.value }))} placeholder="Semester" />
-              </div>
-              <Button variant="primary" size="sm" icon={MdAdd} loading={busy} onClick={addCourse}>Add course</Button>
-            </Surface>
+            {canManage && (
+              <Surface variant="flat" className="!p-4 space-y-3">
+                <p className="text-sm font-semibold mb-0" style={{ color: 'var(--neu-ink)' }}>
+                  <MdLibraryBooks className="inline w-4 h-4 mr-1.5" />
+                  Add a course
+                </p>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <Input wrapperClass="mb-0" value={courseForm.title} onChange={(e) => setCourseForm((f) => ({ ...f, title: e.target.value }))} placeholder="Course title" />
+                  <Input wrapperClass="mb-0" value={courseForm.code} onChange={(e) => setCourseForm((f) => ({ ...f, code: e.target.value }))} placeholder="Code" />
+                  <Input wrapperClass="mb-0" value={courseForm.subject} onChange={(e) => setCourseForm((f) => ({ ...f, subject: e.target.value }))} placeholder="Subject" />
+                  <Select
+                    wrapperClass="mb-0"
+                    value={courseForm.teacher_id}
+                    onChange={(e) => setCourseForm((f) => ({ ...f, teacher_id: e.target.value }))}
+                    placeholder="Unassigned"
+                    options={teacherOptions}
+                  />
+                  <Input wrapperClass="mb-0" type="number" value={courseForm.credits} onChange={(e) => setCourseForm((f) => ({ ...f, credits: e.target.value }))} placeholder="Credits" />
+                  <Input wrapperClass="mb-0" type="number" value={courseForm.semester} onChange={(e) => setCourseForm((f) => ({ ...f, semester: e.target.value }))} placeholder="Semester" />
+                </div>
+                <Button variant="primary" size="sm" icon={MdAdd} loading={busy} onClick={addCourse}>Add course</Button>
+              </Surface>
+            )}
           </div>
         )}
       </Modal>

@@ -17,6 +17,7 @@ import Tabs from '../../components/Common/Tabs';
 import { Reveal, Stagger, StaggerItem } from '../../components/Common/Motion';
 import { useResource, useEndpoint } from '../../hooks/useResource';
 import { useNotification } from '../../hooks/useNotification';
+import { useAuth } from '../../hooks/useAuth';
 import api from '../../lib/api';
 import { formatDate } from '../../utils/helpers';
 
@@ -40,6 +41,13 @@ const money = (value) => `₹${Number(value || 0).toLocaleString(undefined, { ma
 
 export default function ScholarshipsPage() {
   const notification = useNotification();
+  const { profile } = useAuth();
+  // Applying to a scheme is self-service; creating/editing the scheme
+  // itself is an admin action — both currently share `scholarships.write`
+  // on the backend (see denyRoles in scholarships.js), so the UI hides the
+  // scheme-management controls here rather than let a student/parent see
+  // a button that the API would now correctly reject.
+  const canManageSchemes = !['student', 'parent'].includes(profile?.role);
   const [tab, setTab] = useState('applications');
 
   const [statusFilter, setStatusFilter] = useState('');
@@ -280,9 +288,11 @@ export default function ScholarshipsPage() {
           icon={MdCardGiftcard}
           actions={
             <>
-              <Button variant="secondary" icon={MdSchool} onClick={() => { setSchemeForm(EMPTY_SCHEME); setSchemeModal(true); }}>
-                New scheme
-              </Button>
+              {canManageSchemes && (
+                <Button variant="secondary" icon={MdSchool} onClick={() => { setSchemeForm(EMPTY_SCHEME); setSchemeModal(true); }}>
+                  New scheme
+                </Button>
+              )}
               <Button variant="primary" icon={MdAdd} onClick={() => { setApplicationForm(EMPTY_APPLICATION); setApplicationModal(true); }}>
                 New application
               </Button>
@@ -397,7 +407,7 @@ export default function ScholarshipsPage() {
                 icon: MdSchool,
                 title: 'No schemes yet',
                 description: 'A scheme defines the award, the budget and who qualifies.',
-                action: <Button variant="primary" icon={MdAdd} onClick={() => setSchemeModal(true)}>New scheme</Button>,
+                action: canManageSchemes && <Button variant="primary" icon={MdAdd} onClick={() => setSchemeModal(true)}>New scheme</Button>,
               }}
             />
           )}

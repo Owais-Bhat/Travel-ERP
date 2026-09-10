@@ -12,7 +12,7 @@ import db, { withTransaction } from '../lib/db.js';
 import { requireAuthenticatedProfile } from '../middleware/auth.js';
 import { requireInstitution } from '../middleware/tenant.js';
 import { requireFeature } from '../middleware/feature.js';
-import { requirePermission } from '../auth/permissions.js';
+import { requirePermission, denyRoles } from '../auth/permissions.js';
 import { recordAuditEvent } from '../lib/audit.js';
 import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
@@ -165,6 +165,7 @@ router.get(
 router.post(
   '/schemes',
   requirePermission('scholarships.write'),
+  denyRoles('student', 'parent'),
   validate({ body: schemeSchema }),
   asyncHandler(async (req, res) => {
     const id = uuidv4();
@@ -225,6 +226,7 @@ router.get(
 router.put(
   '/schemes/:id',
   requirePermission('scholarships.write'),
+  denyRoles('student', 'parent'),
   validate({ params: idParam, body: partialUpdate(schemeSchema) }),
   asyncHandler(async (req, res) => {
     await findOwnedOrFail(db, 'scholarship_schemes', req.params.id, req.institutionId);
@@ -252,6 +254,7 @@ router.put(
 router.delete(
   '/schemes/:id',
   requirePermission('scholarships.write'),
+  denyRoles('student', 'parent'),
   validate({ params: idParam }),
   asyncHandler(async (req, res) => {
     const scheme = await findOwnedOrFail(db, 'scholarship_schemes', req.params.id, req.institutionId);

@@ -16,6 +16,7 @@ import Badge from '../../components/Common/Badge';
 import { Reveal, Stagger, StaggerItem } from '../../components/Common/Motion';
 import { useResource, useEndpoint } from '../../hooks/useResource';
 import { useNotification } from '../../hooks/useNotification';
+import { useAuth } from '../../hooks/useAuth';
 import api from '../../lib/api';
 import { formatDate } from '../../utils/helpers';
 
@@ -28,6 +29,8 @@ const EMPTY_FORM = {
 
 export default function CertificationsPage() {
   const notification = useNotification();
+  const { profile } = useAuth();
+  const canIssue = !['student', 'parent'].includes(profile?.role);
 
   const [statusFilter, setStatusFilter] = useState('');
   const params = useMemo(() => (statusFilter ? { status: statusFilter } : {}), [statusFilter]);
@@ -160,7 +163,7 @@ export default function CertificationsPage() {
       label: '',
       align: 'right',
       render: (row) => (
-        row.status === 'issued' ? (
+        canIssue && row.status === 'issued' ? (
           <Button size="xs" variant="ghost" icon={MdBlock} onClick={() => revoke(row)}>Revoke</Button>
         ) : null
       ),
@@ -181,9 +184,11 @@ export default function CertificationsPage() {
               <Button variant="secondary" icon={MdSearch} onClick={() => { setVerifyResult(null); setVerifyOpen(true); }}>
                 Verify a code
               </Button>
-              <Button variant="primary" icon={MdAdd} onClick={() => { setForm(EMPTY_FORM); setIssueOpen(true); }}>
-                Issue certificate
-              </Button>
+              {canIssue && (
+                <Button variant="primary" icon={MdAdd} onClick={() => { setForm(EMPTY_FORM); setIssueOpen(true); }}>
+                  Issue certificate
+                </Button>
+              )}
             </>
           }
         />
@@ -227,7 +232,7 @@ export default function CertificationsPage() {
               icon: MdWorkspacePremium,
               title: 'No certificates issued',
               description: 'Every certificate gets a unique code an employer can check without an account.',
-              action: <Button variant="primary" icon={MdAdd} onClick={() => setIssueOpen(true)}>Issue certificate</Button>,
+              action: canIssue && <Button variant="primary" icon={MdAdd} onClick={() => setIssueOpen(true)}>Issue certificate</Button>,
             }}
           />
         </Reveal>
