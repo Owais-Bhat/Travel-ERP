@@ -157,6 +157,25 @@ export function requirePermission(...required) {
 }
 
 /**
+ * A handful of modules (library, transport, hostel, video classes,
+ * discipline) gate their read endpoints on `students.read` — the roster
+ * permission — because that was the only "read about students" key handy
+ * when they were built. Fine for staff/teacher, wrong for student/parent:
+ * browsing a library catalog or your own transport route isn't roster
+ * management, and neither role holds `students.read` at all, so they'd
+ * 403 on a page an admin just explicitly granted them in Settings > Role
+ * Restrictions. Lets those two roles through unconditionally; every other
+ * role still needs the permission passed in.
+ */
+export function requirePermissionOrSelfService(...required) {
+  const inner = requirePermission(...required);
+  return (req, res, next) => {
+    if (['student', 'parent'].includes(req.auth?.profile?.role)) return next();
+    return inner(req, res, next);
+  };
+}
+
+/**
  * Blocks specific roles outright, regardless of `requirePermission`.
  *
  * A handful of admin-only writes (create/delete a scholarship scheme, post

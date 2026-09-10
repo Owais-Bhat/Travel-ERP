@@ -18,8 +18,9 @@ const EMPTY_ROOM = { room_number: '', room_type: '', capacity: 1 };
 export default function HostelPage() {
   const { profile } = useAuth();
   const notification = useNotification();
+  const canManage = !['student', 'parent'].includes(profile?.role);
 
-  const [activeTab, setActiveTab] = useState('hostels');
+  const [activeTab, setActiveTab] = useState(canManage ? 'hostels' : 'allocations');
 
   // ─── Hostels + rooms state ─────────────────────────────────────────
   const [hostels, setHostels] = useState([]);
@@ -261,7 +262,7 @@ export default function HostelPage() {
         <h1 className="text-3xl font-bold text-white">Hostel</h1>
 
         <div className="flex gap-2 border-b border-white/10">
-          {['hostels', 'allocations'].map(tab => (
+          {(canManage ? ['hostels', 'allocations'] : ['allocations']).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -423,7 +424,7 @@ export default function HostelPage() {
                             </span>
                           </td>
                           <td className="py-3 px-4 text-center">
-                            {alloc.status === 'active' && (
+                            {canManage && alloc.status === 'active' && (
                               <button
                                 onClick={() => handleVacate(alloc)}
                                 className="text-red-400/60 hover:text-red-400 transition inline-flex items-center gap-1 text-xs font-semibold"

@@ -10,11 +10,12 @@ import db from '../lib/db.js';
 import { requireAuthenticatedProfile } from '../middleware/auth.js';
 import { requireInstitution } from '../middleware/tenant.js';
 import { requireFeature } from '../middleware/feature.js';
-import { requirePermission } from '../auth/permissions.js';
+import { requirePermission, requirePermissionOrSelfService } from '../auth/permissions.js';
 import { recordAuditEvent } from '../lib/audit.js';
 import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
 import { findOwnedOrFail } from '../lib/query.js';
+import { resolveRoleScope, inClause } from '../lib/roleScope.js';
 import { z, longText, idParam } from '../validation/common.js';
 
 const router = express.Router();
@@ -32,8 +33,25 @@ const recordSchema = z.object({
 
 router.get(
   '/',
-  requirePermission('students.read'),
+  requirePermissionOrSelfService('students.read'),
   asyncHandler(async (req, res) => {
+    // A student/parent can only ever see their own (or their child's)
+    // record — ignore whatever student_id the client sent and force their
+    // own scope, rather than letting a query param read anyone else's.
+    const scope = await resolveRoleScope(req);
+    if (scope) {
+      const own = inClause('d.student_id', scope.studentIds);
+      const [rows] = await db.execute(
+        `SELECT d.*, s.first_name, s.last_name, s.admission_no, s.class_name
+           FROM discipline_records d
+           JOIN students s ON s.id = d.student_id
+          WHERE d.institution_id = ? AND ${own.sql}
+          ORDER BY d.created_at DESC`,
+        [req.institutionId, ...own.params]
+      );
+      return res.json(rows);
+    }
+
     const studentId = req.query.student_id;
     const [rows] = await db.execute(
       studentId

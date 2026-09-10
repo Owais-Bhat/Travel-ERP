@@ -10,10 +10,11 @@ import db, { withTransaction } from '../lib/db.js';
 import { requireAuthenticatedProfile } from '../middleware/auth.js';
 import { requireInstitution } from '../middleware/tenant.js';
 import { requireFeature } from '../middleware/feature.js';
-import { requirePermission } from '../auth/permissions.js';
+import { requirePermission, requirePermissionOrSelfService } from '../auth/permissions.js';
 import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
 import { findOwnedOrFail, buildUpdate } from '../lib/query.js';
+import { resolveRoleScope, inClause } from '../lib/roleScope.js';
 import { z, optionalText, idParam, phone, partialUpdate } from '../validation/common.js';
 
 const router = express.Router();
@@ -34,7 +35,7 @@ const hostelSchema = z.object({
 
 router.get(
   '/hostels',
-  requirePermission('students.read'),
+  requirePermissionOrSelfService('students.read'),
   asyncHandler(async (req, res) => {
     const [rows] = await db.execute(
       `SELECT h.*,
@@ -106,7 +107,7 @@ const roomSchema = z.object({
 
 router.get(
   '/rooms',
-  requirePermission('students.read'),
+  requirePermissionOrSelfService('students.read'),
   validate({ query: z.object({ hostel_id: z.string().uuid().optional() }) }),
   asyncHandler(async (req, res) => {
     const [rows] = await db.execute(
@@ -176,9 +177,14 @@ router.delete(
 // -------------------------------------------------------- allocations
 router.get(
   '/allocations',
-  requirePermission('students.read'),
+  requirePermissionOrSelfService('students.read'),
   validate({ query: z.object({ status: z.enum(['active', 'vacated']).optional() }) }),
   asyncHandler(async (req, res) => {
+    // A student/parent only ever sees their own (or their child's) room
+    // allocation, not the whole hostel's.
+    const scope = await resolveRoleScope(req);
+    const ownClause = scope ? inClause('a.student_id', scope.studentIds) : null;
+
     const [rows] = await db.execute(
       `SELECT a.*, r.room_number, r.room_type, h.name AS hostel_name,
               s.first_name, s.last_name, s.admission_no, s.class_name
@@ -187,8 +193,9 @@ router.get(
          JOIN hostels h ON h.id = r.hostel_id
          JOIN students s ON s.id = a.student_id
         WHERE a.institution_id = ? AND (? IS NULL OR a.status = ?)
+          ${ownClause ? `AND ${ownClause.sql}` : ''}
         ORDER BY a.status = 'active' DESC, a.allocated_at DESC`,
-      [req.institutionId, req.query.status || null, req.query.status || null]
+      [req.institutionId, req.query.status || null, req.query.status || null, ...(ownClause ? ownClause.params : [])]
     );
     res.json(rows);
   })

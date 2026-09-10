@@ -14,6 +14,7 @@ const EMPTY_FORM = { student_id: '', record_type: 'demerit', points: 1, reason: 
 export default function DisciplinePage() {
   const { profile } = useAuth();
   const notification = useNotification();
+  const canManage = !['student', 'parent'].includes(profile?.role);
 
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -94,10 +95,12 @@ export default function DisciplinePage() {
     <MainLayout>
       <div className="p-6 space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-white">Discipline Tracking</h1>
-          <Button variant="primary" onClick={openModal}>
-            <MdAdd className="inline mr-1" /> Add Record
-          </Button>
+          <h1 className="text-3xl font-bold text-white">{canManage ? 'Discipline Tracking' : 'My Discipline Record'}</h1>
+          {canManage && (
+            <Button variant="primary" onClick={openModal}>
+              <MdAdd className="inline mr-1" /> Add Record
+            </Button>
+          )}
         </div>
 
         {loading ? (
@@ -124,9 +127,11 @@ export default function DisciplinePage() {
                   {r.reason && <p className="text-white/60 text-sm">{r.reason}</p>}
                   <p className="text-white/30 text-xs mt-1">{formatDate(r.created_at)}</p>
                 </div>
-                <button onClick={() => handleDelete(r)} className="text-red-400/60 hover:text-red-400 transition shrink-0">
-                  <MdDelete className="w-4 h-4" />
-                </button>
+                {canManage && (
+                  <button onClick={() => handleDelete(r)} className="text-red-400/60 hover:text-red-400 transition shrink-0">
+                    <MdDelete className="w-4 h-4" />
+                  </button>
+                )}
               </GlassCard>
             ))}
           </div>

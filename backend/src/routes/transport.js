@@ -10,10 +10,11 @@ import db, { withTransaction } from '../lib/db.js';
 import { requireAuthenticatedProfile } from '../middleware/auth.js';
 import { requireInstitution } from '../middleware/tenant.js';
 import { requireFeature } from '../middleware/feature.js';
-import { requirePermission } from '../auth/permissions.js';
+import { requirePermission, requirePermissionOrSelfService } from '../auth/permissions.js';
 import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
 import { findOwnedOrFail, buildUpdate } from '../lib/query.js';
+import { resolveRoleScope } from '../lib/roleScope.js';
 import { z, optionalText, idParam, phone, partialUpdate } from '../validation/common.js';
 import crypto from 'node:crypto';
 
@@ -62,7 +63,7 @@ function withStops(row) {
 
 router.get(
   '/routes',
-  requirePermission('students.read'),
+  requirePermissionOrSelfService('students.read'),
   asyncHandler(async (req, res) => {
     const [rows] = await db.execute(
       `SELECT r.*,
@@ -78,10 +79,19 @@ router.get(
 
 router.get(
   '/routes/:id',
-  requirePermission('students.read'),
+  requirePermissionOrSelfService('students.read'),
   validate({ params: idParam }),
   asyncHandler(async (req, res) => {
     const route = await findOwnedOrFail(db, 'transport_routes', req.params.id, req.institutionId);
+
+    // A student/parent sees the route (driver, stops, timing) but not the
+    // full rider roster — other families' names/phone numbers aren't
+    // theirs to see just because they share a bus.
+    const scope = await resolveRoleScope(req);
+    if (scope) {
+      return res.json({ route: withStops(route), students: [] });
+    }
+
     const [students] = await db.execute(
       `SELECT sr.id AS assignment_id, sr.pickup_stop, s.id, s.first_name, s.last_name,
               s.admission_no, s.class_name, s.section, s.parent_phone
@@ -262,7 +272,7 @@ router.post(
 
 router.get(
   '/routes/:id/location',
-  requirePermission('students.read'),
+  requirePermissionOrSelfService('students.read'),
   requireFeature('gps_tracking'),
   validate({ params: idParam }),
   asyncHandler(async (req, res) => {

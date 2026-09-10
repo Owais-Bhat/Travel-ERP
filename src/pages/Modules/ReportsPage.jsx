@@ -18,6 +18,8 @@ import Tabs from '../../components/Common/Tabs';
 import { Reveal, Stagger, StaggerItem } from '../../components/Common/Motion';
 import { useEndpoint } from '../../hooks/useResource';
 import { useNotification } from '../../hooks/useNotification';
+import { useAuth } from '../../hooks/useAuth';
+import GlassCard from '../../components/Common/GlassCard';
 import api from '../../lib/api';
 import { API_BASE_URL } from '../../config';
 import { getToken } from '../../lib/api';
@@ -76,14 +78,34 @@ function ChartTooltip({ active, payload, label }) {
 
 export default function ReportsPage() {
   const notification = useNotification();
+  const { profile } = useAuth();
+  // Institution-wide analytics (admissions, leads, commissions) has no
+  // per-student equivalent — there's nothing scoped to show a student or
+  // parent here, unlike the other modules an admin can grant beyond a
+  // role's baseline. Skip both fetches rather than let them 403.
+  const selfService = ['student', 'parent'].includes(profile?.role);
 
   const [range, setRange] = useState({ from: monthsAgo(12), to: today() });
   const [metric, setMetric] = useState('admissions');
   const [downloading, setDownloading] = useState('');
 
   const rangeParams = useMemo(() => ({ from: range.from, to: range.to }), [range]);
-  const overview = useEndpoint('/reports/overview', { params: rangeParams });
-  const trends = useEndpoint('/reports/trends', { params: { ...rangeParams, metric } });
+  const overview = useEndpoint('/reports/overview', { params: rangeParams, enabled: !selfService });
+  const trends = useEndpoint('/reports/trends', { params: { ...rangeParams, metric }, enabled: !selfService });
+
+  if (selfService) {
+    return (
+      <MainLayout>
+        <div className="p-4 sm:p-6">
+          <GlassCard className="p-10 text-center text-white/40">
+            Reports & Analytics covers institution-wide numbers — admissions, leads, commissions — with nothing
+            scoped to an individual student or parent to show here. Ask your institution admin to turn this module
+            off for your role in Settings &gt; Role Restrictions.
+          </GlassCard>
+        </div>
+      </MainLayout>
+    );
+  }
 
   const colors = useMemo(() => ({
     primary: themeColor('--neu-primary', '#4059ad'),

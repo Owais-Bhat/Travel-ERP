@@ -11,10 +11,11 @@ import db, { withTransaction } from '../lib/db.js';
 import { requireAuthenticatedProfile } from '../middleware/auth.js';
 import { requireInstitution } from '../middleware/tenant.js';
 import { requireFeature } from '../middleware/feature.js';
-import { requirePermission } from '../auth/permissions.js';
+import { requirePermission, requirePermissionOrSelfService } from '../auth/permissions.js';
 import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
 import { findOwnedOrFail, buildUpdate } from '../lib/query.js';
+import { resolveRoleScope, inClause } from '../lib/roleScope.js';
 import { z, optionalText, idParam, partialUpdate } from '../validation/common.js';
 
 const router = express.Router();
@@ -38,7 +39,7 @@ const bookSchema = z.object({
 
 router.get(
   '/books',
-  requirePermission('students.read'),
+  requirePermissionOrSelfService('students.read'),
   asyncHandler(async (req, res) => {
     const search = req.query.search ? `%${req.query.search}%` : null;
     const [rows] = await db.execute(
@@ -126,9 +127,16 @@ router.delete(
 // -------------------------------------------------------- issues
 router.get(
   '/issues',
-  requirePermission('students.read'),
+  requirePermissionOrSelfService('students.read'),
   asyncHandler(async (req, res) => {
     const status = ['issued', 'returned'].includes(req.query.status) ? req.query.status : null;
+
+    // A student/parent only ever sees their own (or their child's) issued
+    // books, not the whole school's — `students.read` alone would
+    // otherwise expose that, which is why self-service roles skip it above.
+    const scope = await resolveRoleScope(req);
+    const ownClause = scope ? inClause('li.student_id', scope.studentIds) : null;
+
     const [rows] = await db.execute(
       `SELECT li.*, b.title AS book_title, b.author AS book_author,
               s.first_name, s.last_name, s.admission_no, s.class_name
@@ -136,8 +144,9 @@ router.get(
          JOIN library_books b ON b.id = li.book_id
          JOIN students s ON s.id = li.student_id
         WHERE li.institution_id = ? AND (? IS NULL OR li.status = ?)
+          ${ownClause ? `AND ${ownClause.sql}` : ''}
         ORDER BY li.status = 'issued' DESC, li.due_date ASC`,
-      [req.institutionId, status, status]
+      [req.institutionId, status, status, ...(ownClause ? ownClause.params : [])]
     );
     res.json(rows);
   })

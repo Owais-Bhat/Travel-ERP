@@ -14,6 +14,7 @@ const EMPTY_FORM = { title: '', subject: '', class_name: '', teacher_id: '', mee
 export default function VideoClassesPage() {
   const { profile } = useAuth();
   const notification = useNotification();
+  const canManage = !['student', 'parent'].includes(profile?.role);
 
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -120,9 +121,11 @@ export default function VideoClassesPage() {
       <div className="p-6 space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-white">Video Classes</h1>
-          <Button variant="primary" onClick={() => openModal()}>
-            <MdAdd className="inline mr-1" /> Schedule Class
-          </Button>
+          {canManage && (
+            <Button variant="primary" onClick={() => openModal()}>
+              <MdAdd className="inline mr-1" /> Schedule Class
+            </Button>
+          )}
         </div>
 
         <div className="flex gap-2">
@@ -157,10 +160,12 @@ export default function VideoClassesPage() {
                   <h3 className="text-white font-bold text-base flex items-center gap-2">
                     <MdVideocam className="text-neon-cyan w-5 h-5 shrink-0" /> {item.title}
                   </h3>
-                  <div className="flex gap-1.5 shrink-0 ml-2">
-                    <button onClick={() => openModal(item)} className="text-blue-400/70 hover:text-blue-400 transition"><MdEdit className="w-4 h-4" /></button>
-                    <button onClick={() => handleDelete(item)} className="text-red-400/60 hover:text-red-400 transition"><MdDelete className="w-4 h-4" /></button>
-                  </div>
+                  {canManage && (
+                    <div className="flex gap-1.5 shrink-0 ml-2">
+                      <button onClick={() => openModal(item)} className="text-blue-400/70 hover:text-blue-400 transition"><MdEdit className="w-4 h-4" /></button>
+                      <button onClick={() => handleDelete(item)} className="text-red-400/60 hover:text-red-400 transition"><MdDelete className="w-4 h-4" /></button>
+                    </div>
+                  )}
                 </div>
                 <p className="text-white/60 text-sm mb-1">{item.subject || 'No subject'} {item.class_name ? `· ${item.class_name}` : ''}</p>
                 {item.teacher_first_name && (
@@ -178,7 +183,7 @@ export default function VideoClassesPage() {
                     {item.status}
                   </span>
                   <div className="flex items-center gap-3">
-                    {item.status === 'scheduled' && (
+                    {canManage && item.status === 'scheduled' && (
                       <button onClick={() => handleMarkCompleted(item)} className="text-xs text-white/50 hover:text-white">Mark done</button>
                     )}
                     <a href={item.meeting_link} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300 text-sm font-semibold inline-flex items-center gap-1">

@@ -23,6 +23,7 @@ function stopLabel(stop) {
 export default function TransportPage() {
   const { profile } = useAuth();
   const notification = useNotification();
+  const canManage = !['student', 'parent'].includes(profile?.role);
 
   const [activeTab, setActiveTab] = useState('routes');
 
@@ -268,7 +269,7 @@ export default function TransportPage() {
 
         {/* Tabs */}
         <div className="flex gap-2 border-b border-white/10">
-          {['routes', 'assignment'].map(tab => (
+          {(canManage ? ['routes', 'assignment'] : ['routes']).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -290,9 +291,11 @@ export default function TransportPage() {
               <h2 className="text-xl font-bold text-white flex items-center gap-2">
                 <MdDirectionsBus className="text-neon-cyan" /> Routes ({routes.length})
               </h2>
-              <Button variant="primary" onClick={() => openRouteModal()}>
-                <MdAdd className="inline mr-1" /> Add Route
-              </Button>
+              {canManage && (
+                <Button variant="primary" onClick={() => openRouteModal()}>
+                  <MdAdd className="inline mr-1" /> Add Route
+                </Button>
+              )}
             </div>
 
             {routesLoading ? (
@@ -309,17 +312,19 @@ export default function TransportPage() {
                     <GlassCard key={route.id} className="p-5">
                       <div className="flex justify-between items-start mb-3">
                         <h3 className="text-white font-bold text-base">{route.route_name}</h3>
-                        <div className="flex gap-1.5">
-                          <button onClick={() => openRouteModal(route)} className="text-blue-400/70 hover:text-blue-400 transition">
-                            <MdEdit className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => handleToggleActive(route)} className={`transition ${route.is_active ? 'text-emerald-400' : 'text-gray-400'}`}>
-                            {route.is_active ? <MdToggleOn className="w-5 h-5" /> : <MdToggleOff className="w-5 h-5" />}
-                          </button>
-                          <button onClick={() => handleDeleteRoute(route)} className="text-red-400/60 hover:text-red-400 transition">
-                            <MdDelete className="w-4 h-4" />
-                          </button>
-                        </div>
+                        {canManage && (
+                          <div className="flex gap-1.5">
+                            <button onClick={() => openRouteModal(route)} className="text-blue-400/70 hover:text-blue-400 transition">
+                              <MdEdit className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => handleToggleActive(route)} className={`transition ${route.is_active ? 'text-emerald-400' : 'text-gray-400'}`}>
+                              {route.is_active ? <MdToggleOn className="w-5 h-5" /> : <MdToggleOff className="w-5 h-5" />}
+                            </button>
+                            <button onClick={() => handleDeleteRoute(route)} className="text-red-400/60 hover:text-red-400 transition">
+                              <MdDelete className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       <div className="space-y-1.5 text-sm mb-3">

@@ -17,6 +17,7 @@ const EMPTY_BOOK = { title: '', author: '', isbn: '', category: '', publisher: '
 export default function LibraryPage() {
   const { profile } = useAuth();
   const notification = useNotification();
+  const canManage = !['student', 'parent'].includes(profile?.role);
 
   const [activeTab, setActiveTab] = useState('catalog');
 
@@ -220,9 +221,11 @@ export default function LibraryPage() {
                   onBlur={() => loadBooks(search)}
                 />
               </div>
-              <Button variant="primary" onClick={() => openBookModal()}>
-                <MdAdd className="inline mr-1" /> Add Book
-              </Button>
+              {canManage && (
+                <Button variant="primary" onClick={() => openBookModal()}>
+                  <MdAdd className="inline mr-1" /> Add Book
+                </Button>
+              )}
             </div>
 
             {booksLoading ? (
@@ -241,14 +244,16 @@ export default function LibraryPage() {
                   <GlassCard key={book.id} className="p-5">
                     <div className="flex justify-between items-start mb-2">
                       <h3 className="text-white font-bold text-base leading-tight">{book.title}</h3>
-                      <div className="flex gap-1.5 shrink-0 ml-2">
-                        <button onClick={() => openBookModal(book)} className="text-blue-400/70 hover:text-blue-400 transition">
-                          <MdEdit className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => handleDeleteBook(book)} className="text-red-400/60 hover:text-red-400 transition">
-                          <MdDelete className="w-4 h-4" />
-                        </button>
-                      </div>
+                      {canManage && (
+                        <div className="flex gap-1.5 shrink-0 ml-2">
+                          <button onClick={() => openBookModal(book)} className="text-blue-400/70 hover:text-blue-400 transition">
+                            <MdEdit className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => handleDeleteBook(book)} className="text-red-400/60 hover:text-red-400 transition">
+                            <MdDelete className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                     <p className="text-white/60 text-sm mb-1">{book.author || 'Unknown author'}</p>
                     {book.category && (
@@ -258,14 +263,16 @@ export default function LibraryPage() {
                       <span className={`text-sm font-semibold ${book.available_copies > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                         {book.available_copies}/{book.total_copies} available
                       </span>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={book.available_copies < 1}
-                        onClick={() => openIssueModal(book)}
-                      >
-                        Issue
-                      </Button>
+                      {canManage && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={book.available_copies < 1}
+                          onClick={() => openIssueModal(book)}
+                        >
+                          Issue
+                        </Button>
+                      )}
                     </div>
                   </GlassCard>
                 ))}
@@ -333,7 +340,7 @@ export default function LibraryPage() {
                               </span>
                             </td>
                             <td className="py-3 px-4 text-center">
-                              {issue.status === 'issued' && (
+                              {canManage && issue.status === 'issued' && (
                                 <button
                                   onClick={() => handleReturnBook(issue)}
                                   className="text-blue-400/70 hover:text-blue-400 transition inline-flex items-center gap-1 text-xs font-semibold"

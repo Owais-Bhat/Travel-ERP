@@ -10,10 +10,11 @@ import db from '../lib/db.js';
 import { requireAuthenticatedProfile } from '../middleware/auth.js';
 import { requireInstitution } from '../middleware/tenant.js';
 import { requireFeature } from '../middleware/feature.js';
-import { requirePermission } from '../auth/permissions.js';
+import { requirePermission, requirePermissionOrSelfService } from '../auth/permissions.js';
 import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
 import { findOwnedOrFail, buildUpdate } from '../lib/query.js';
+import { resolveRoleScope, inClause } from '../lib/roleScope.js';
 import { z, optionalText, idParam, partialUpdate } from '../validation/common.js';
 
 const router = express.Router();
@@ -36,17 +37,22 @@ const classSchema = z.object({
 
 router.get(
   '/',
-  requirePermission('students.read'),
+  requirePermissionOrSelfService('students.read'),
   validate({ query: z.object({ status: z.enum(['scheduled', 'completed', 'cancelled']).optional() }) }),
   asyncHandler(async (req, res) => {
+    // A student/parent only sees classes scheduled for their own class(es).
+    const scope = await resolveRoleScope(req);
+    const ownClause = scope ? inClause('v.class_name', scope.classNames) : null;
+
     const [rows] = await db.execute(
       `SELECT v.*, t.first_name AS teacher_first_name, t.last_name AS teacher_last_name
          FROM video_classes v
          LEFT JOIN teachers t ON t.id = v.teacher_id
         WHERE v.institution_id = ? AND (? IS NULL OR v.status = ?)
+          ${ownClause ? `AND ${ownClause.sql}` : ''}
         ORDER BY v.scheduled_at DESC
         LIMIT 200`,
-      [req.institutionId, req.query.status || null, req.query.status || null]
+      [req.institutionId, req.query.status || null, req.query.status || null, ...(ownClause ? ownClause.params : [])]
     );
     res.json(rows);
   })

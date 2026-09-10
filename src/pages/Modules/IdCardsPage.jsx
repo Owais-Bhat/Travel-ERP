@@ -68,11 +68,23 @@ export default function IdCardsPage() {
   const { profile } = useAuth();
   const { institution } = useAppData();
   const notification = useNotification();
+  const selfService = ['student', 'parent'].includes(profile?.role);
 
   const [personType, setPersonType] = useState('student');
   const [search, setSearch] = useState('');
   const [results, setResults] = useState([]);
   const [selected, setSelected] = useState([]);
+
+  // A student/parent generates only their own (or their child's) card —
+  // `/students` search needs a roster permission neither role holds, and
+  // browsing/printing anyone else's card was never the point here anyway.
+  useEffect(() => {
+    if (!selfService) return;
+    api.get('/students/me').then(({ data }) => {
+      setSelected((data || []).map((s) => ({ ...s, __type: 'student' })));
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selfService]);
 
   const runSearch = async (val) => {
     setSearch(val);
@@ -117,54 +129,62 @@ export default function IdCardsPage() {
         `}</style>
 
         <div className="flex justify-between items-center print:hidden">
-          <h1 className="text-3xl font-bold text-white">ID Card Generator</h1>
+          <h1 className="text-3xl font-bold text-white">{selfService ? 'My ID Card' : 'ID Card Generator'}</h1>
           <Button variant="primary" onClick={handlePrint} disabled={selected.length === 0}>
-            <MdPrint className="inline mr-1" /> Print ({selected.length})
+            <MdPrint className="inline mr-1" /> Print{selfService ? '' : ` (${selected.length})`}
           </Button>
         </div>
 
-        <GlassCard className="p-4 print:hidden">
-          <div className="flex gap-2 mb-3">
-            {['student', 'teacher'].map(t => (
-              <button
-                key={t}
-                onClick={() => setPersonType(t)}
-                className={`px-4 py-1.5 rounded-lg text-sm font-semibold capitalize transition ${
-                  personType === t ? 'bg-blue-500/30 text-blue-300 border border-blue-500/40' : 'bg-white/5 text-white/50'
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-          <div className="relative">
-            <MdSearch className="absolute left-3 top-3 w-4 h-4 text-white/40" />
-            <input className="input-glass w-full pl-9" placeholder={`Search ${personType}s by name...`} value={search} onChange={e => runSearch(e.target.value)} />
-          </div>
-          {results.length > 0 && (
-            <div className="mt-2 max-h-48 overflow-y-auto space-y-1">
-              {results.map(p => (
-                <button key={p.id} onClick={() => addToSelection(p)} className="w-full text-left px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm text-white/80 transition">
-                  {p.first_name} {p.last_name} {p.class_name ? `· Class ${p.class_name}` : ''}
+        {!selfService && (
+          <GlassCard className="p-4 print:hidden">
+            <div className="flex gap-2 mb-3">
+              {['student', 'teacher'].map(t => (
+                <button
+                  key={t}
+                  onClick={() => setPersonType(t)}
+                  className={`px-4 py-1.5 rounded-lg text-sm font-semibold capitalize transition ${
+                    personType === t ? 'bg-blue-500/30 text-blue-300 border border-blue-500/40' : 'bg-white/5 text-white/50'
+                  }`}
+                >
+                  {t}
                 </button>
               ))}
             </div>
-          )}
-        </GlassCard>
+            <div className="relative">
+              <MdSearch className="absolute left-3 top-3 w-4 h-4 text-white/40" />
+              <input className="input-glass w-full pl-9" placeholder={`Search ${personType}s by name...`} value={search} onChange={e => runSearch(e.target.value)} />
+            </div>
+            {results.length > 0 && (
+              <div className="mt-2 max-h-48 overflow-y-auto space-y-1">
+                {results.map(p => (
+                  <button key={p.id} onClick={() => addToSelection(p)} className="w-full text-left px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm text-white/80 transition">
+                    {p.first_name} {p.last_name} {p.class_name ? `· Class ${p.class_name}` : ''}
+                  </button>
+                ))}
+              </div>
+            )}
+          </GlassCard>
+        )}
 
         {selected.length === 0 ? (
-          <GlassCard className="p-10 text-center text-white/40 print:hidden">Search and select students/staff to generate their ID cards.</GlassCard>
+          <GlassCard className="p-10 text-center text-white/40 print:hidden">
+            {selfService
+              ? "Your account isn't linked to a student record yet — ask your institution admin to link it."
+              : 'Search and select students/staff to generate their ID cards.'}
+          </GlassCard>
         ) : (
           <div id="id-card-print-area" className="flex flex-wrap gap-4">
             {selected.map(person => (
               <div key={person.id} className="relative group">
                 <IdCard institution={institution} person={person} personType={person.__type} />
-                <button
-                  onClick={() => removeFromSelection(person.id)}
-                  className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 text-white text-xs opacity-0 group-hover:opacity-100 transition print:hidden"
-                >
-                  ×
-                </button>
+                {!selfService && (
+                  <button
+                    onClick={() => removeFromSelection(person.id)}
+                    className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 text-white text-xs opacity-0 group-hover:opacity-100 transition print:hidden"
+                  >
+                    ×
+                  </button>
+                )}
               </div>
             ))}
           </div>

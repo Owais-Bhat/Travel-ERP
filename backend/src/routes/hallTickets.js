@@ -14,6 +14,7 @@ import { validate } from '../lib/validate.js';
 import { findOwnedOrFail } from '../lib/query.js';
 import { z } from '../validation/common.js';
 import { getFeeClearance } from '../lib/feeClearance.js';
+import { resolveRoleScope } from '../lib/roleScope.js';
 
 const router = express.Router();
 
@@ -28,6 +29,14 @@ router.get(
   asyncHandler(async (req, res) => {
     const exam = await findOwnedOrFail(db, 'exams', req.params.examId, req.institutionId);
     const student = await findOwnedOrFail(db, 'students', req.params.studentId, req.institutionId);
+
+    // A student/parent can only pull their own (or their child's) hall
+    // ticket — exams.read alone would otherwise let them fetch anyone's by
+    // swapping the studentId in the URL.
+    const scope = await resolveRoleScope(req);
+    if (scope && !scope.studentIds.includes(student.id)) {
+      throw ApiError.forbidden('You can only view your own hall ticket.');
+    }
 
     const clearance = await getFeeClearance(db, req.institutionId, student.id);
     if (!clearance.cleared) {
