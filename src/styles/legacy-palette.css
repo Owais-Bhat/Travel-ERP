@@ -30,12 +30,17 @@ body {
 }
 
 /* --- headings and solid white text ------------------------- */
-.text-white:not([class*='bg-gradient']):not([class*='bg-[']):not(.btn-primary):not(.btn-danger):not(.neu-btn-primary):not(.neu-btn-danger) {
+/* `bg-slate-*` is excluded alongside bg-gradient/bg-[...]: an element that
+   sets its own fixed dark surface (e.g. a <select>'s <option class="bg-
+   slate-900 text-white">) is sitting on a real colour, same as those two —
+   remapping just the text and not the background it was paired with turns
+   it into dark-on-dark. */
+.text-white:not([class*='bg-gradient']):not([class*='bg-[']):not([class*='bg-slate-']):not(.btn-primary):not(.btn-danger):not(.neu-btn-primary):not(.neu-btn-danger) {
   color: var(--neu-ink);
 }
 
 /* --- muted white (the old /40 … /80 opacity scale) --------- */
-[class*='text-white/']:not([class*='bg-gradient']):not([class*='bg-[']) {
+[class*='text-white/']:not([class*='bg-gradient']):not([class*='bg-[']):not([class*='bg-slate-']) {
   color: var(--neu-ink-soft);
 }
 
