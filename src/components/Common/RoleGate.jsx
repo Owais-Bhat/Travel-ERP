@@ -27,10 +27,6 @@ export default function RoleGate({ path, children }) {
   // hard reload/direct link there's a real window where it's still null
   // even though the tenant genuinely granted this route. Wait for it
   // rather than redirect away from a page the admin just enabled.
-  if (typeof window !== 'undefined') {
-    window.__roleGateDebug = { role, routePath, institution, staticOk: canAccessPath(role, routePath), fullOk: canAccessPath(role, routePath, institution) };
-  }
-
   if (canAccessPath(role, routePath)) {
     return children;
   }
