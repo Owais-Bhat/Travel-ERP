@@ -1,11 +1,13 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { useAppData } from '../../hooks/useAppData';
 import { canAccessPath } from '../../auth/permissions';
 import GlassCard from './GlassCard';
 
 export default function RoleGate({ path, children }) {
   const location = useLocation();
   const { profile, user, loading } = useAuth();
+  const { institution } = useAppData();
   const role = profile?.role || user?.user_metadata?.role;
   const routePath = path || location.pathname;
 
@@ -17,7 +19,7 @@ export default function RoleGate({ path, children }) {
     );
   }
 
-  if (canAccessPath(role, routePath)) {
+  if (canAccessPath(role, routePath, institution)) {
     return children;
   }
 
@@ -25,7 +27,7 @@ export default function RoleGate({ path, children }) {
     return <Navigate to="/admin" replace />;
   }
 
-  if (routePath !== '/dashboard' && canAccessPath(role, '/dashboard')) {
+  if (routePath !== '/dashboard' && canAccessPath(role, '/dashboard', institution)) {
     return <Navigate to="/dashboard" replace />;
   }
 

@@ -381,12 +381,26 @@ export default function DocumentsPage() {
         footer={
           <>
             <Button variant="secondary" onClick={() => setUploadOpen(false)}>Cancel</Button>
-            <Button variant="primary" loading={uploading} onClick={upload}>Upload</Button>
+            <Button
+              variant="primary"
+              loading={uploading}
+              disabled={tab === 'students' && selfService && myStudents.length === 0}
+              onClick={upload}
+            >
+              Upload
+            </Button>
           </>
         }
       >
         <div className="space-y-4">
-          {tab === 'students' && selfService && (
+          {tab === 'students' && selfService && myStudents.length === 0 && (
+            <div className="text-sm px-3 py-2.5 rounded-lg" style={{ background: 'var(--neu-bg)', color: 'var(--neu-ink-soft)' }}>
+              Your account isn&apos;t linked to a student record yet — ask your institution admin to link it
+              (Students → edit the record → &quot;Student&apos;s own login&quot;) before you can upload documents.
+            </div>
+          )}
+
+          {tab === 'students' && selfService && myStudents.length > 0 && (
             myStudents.length > 1 ? (
               <Select
                 label="Student"

@@ -4,7 +4,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useAppData } from '../../hooks/useAppData';
 import { MENU_ITEMS } from '../../config';
 import { canAccessPath } from '../../auth/permissions';
-import { getFeatureByRoute } from '../../saas/features';
+import { getFeatureByRoute, FEATURE_CATALOG, RESTRICTABLE_ROLES } from '../../saas/features';
 import Avatar from '../Common/Avatar';
 import { motion, AnimatePresence, spring } from '../Common/Motion';
 import { fileHref } from '../../utils/helpers';
@@ -17,6 +17,7 @@ import {
   MdWorkspacePremium, MdCardGiftcard, MdHandshake, MdContactPhone,
   MdFolderShared, MdAssessment, MdMenuBook, MdBadge, MdCalendarMonth,
   MdGavel, MdEventBusy, MdMeetingRoom, MdEventNote, MdQuiz, MdPoll, MdWarning,
+  MdVideocam, MdHotel, MdLocalHospital,
 } from 'react-icons/md';
 
 /** WCAG relative luminance → readable ink color (near-white or near-black) for a given hex background. */
@@ -37,6 +38,25 @@ const ICON_MAP = {
   MdWorkspacePremium, MdCardGiftcard, MdHandshake, MdContactPhone,
   MdFolderShared, MdAssessment, MdMenuBook, MdBadge, MdCalendarMonth,
   MdGavel, MdEventBusy, MdMeetingRoom, MdEventNote, MdQuiz, MdPoll, MdWarning,
+  MdVideocam, MdHotel, MdLocalHospital,
+};
+
+/**
+ * Icon for a feature-catalog entry that isn't already in the role's own
+ * MENU_ITEMS list (see the "extra" items appended below) — keyed by
+ * FEATURE_CATALOG's `key`, not by route, since that's what we're iterating.
+ */
+const EXTRA_FEATURE_ICONS = {
+  fees: 'MdCreditCard', transport: 'MdDirectionsBus', hostel: 'MdHotel',
+  library: 'MdMenuBook', discipline: 'MdGavel', hall_tickets: 'MdBadge',
+  video_classes: 'MdVideocam', id_cards: 'MdBadge', reports: 'MdAssessment',
+  inventory: 'MdBusiness', payroll: 'MdAccountBalance', calendar: 'MdCalendarMonth',
+  visitor_management: 'MdPerson', facility_booking: 'MdMeetingRoom', alumni: 'MdSchool',
+  gps_tracking: 'MdDirectionsBus', canteen_wallet: 'MdCreditCard',
+  health_records: 'MdLocalHospital', substitute_teacher: 'MdPeople',
+  multi_branch: 'MdBusiness', biometric_attendance: 'MdAccessTime',
+  leads: 'MdContactPhone', admissions: 'MdBusiness', referrals: 'MdHandshake',
+  students: 'MdPeople', feedback_survey: 'MdPoll', early_warning: 'MdWarning',
 };
 
 /**
@@ -85,7 +105,7 @@ export default function Sidebar({ isOpen, onClose }) {
   }, [brandPrimaryColor]);
 
   const canShowPath = (path) => {
-    if (!canAccessPath(role, path)) return false;
+    if (!canAccessPath(role, path, institution)) return false;
     if (isSuperAdmin) return true;
     const feature = getFeatureByRoute(path);
     return !feature || !institution || hasFeature(feature.key);
@@ -99,9 +119,26 @@ export default function Sidebar({ isOpen, onClose }) {
     return canShowPath(item.path) ? item : null;
   };
 
-  const menuItems = (MENU_ITEMS[role] || MENU_ITEMS.student)
+  const baseMenuItems = (MENU_ITEMS[role] || MENU_ITEMS.student)
     .map(filterMenuItem)
     .filter(Boolean);
+
+  // Settings > Role Restrictions can only *narrow* a role from the static
+  // list above on its own — a tenant admin turning on a module the role's
+  // baseline never included (e.g. Fees for students) would otherwise never
+  // surface anywhere to click, even though canAccessPath (and the route
+  // itself, via FeatureGate) now allows it. Add one flat item per such
+  // catalog entry so the grant is actually reachable.
+  const coveredPaths = new Set(
+    baseMenuItems.flatMap((item) => (item.subItems ? item.subItems.map((s) => s.path) : [item.path]))
+  );
+  const extraMenuItems = (!isSuperAdmin && institution && RESTRICTABLE_ROLES.includes(role))
+    ? FEATURE_CATALOG
+        .filter((f) => f.route && !coveredPaths.has(f.route) && hasFeature(f.key))
+        .map((f) => ({ key: f.key, iconName: EXTRA_FEATURE_ICONS[f.key] || 'MdDashboard', label: f.label, path: f.route }))
+    : [];
+
+  const menuItems = [...baseMenuItems, ...extraMenuItems];
 
   const isActive = (path) => location.pathname === path;
   const hasActive = (subs) => subs?.some((sub) => location.pathname === sub.path);

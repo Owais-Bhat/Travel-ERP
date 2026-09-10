@@ -5,6 +5,8 @@
  * The API enforces the real thing in `backend/src/auth/permissions.js`;
  * keep the two in step when you add a module.
  */
+import { FEATURE_CATALOG, isFeatureEnabledForRole } from '../saas/features';
+
 const TENANT_ADMIN_ROUTES = [
   '/dashboard',
   '/students',
@@ -172,9 +174,23 @@ export function getRolePermissions(role = 'student') {
   return ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS.student;
 }
 
-export function canAccessPath(role, pathname) {
+/**
+ * `institution` is optional and, when passed, extends the static list above:
+ * a tenant admin's Settings > Role Restrictions can only ever narrow what a
+ * role sees among routes already in its baseline list — restricting a role
+ * to a *subset* is the only lever `isFeatureEnabledForRole` gives on its
+ * own. Granting a restrictable role a module outside that baseline (e.g.
+ * turning "Fees" on for students, who don't have /fees above) needs this
+ * extra check against the feature catalog's own `route`, or the admin's
+ * grant would show in the sidebar (Sidebar.jsx adds it) but 403 here.
+ */
+export function canAccessPath(role, pathname, institution) {
   const permissions = getRolePermissions(role);
-  return permissions.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  if (permissions.some((path) => pathname === path || pathname.startsWith(`${path}/`))) return true;
+  if (!institution) return false;
+
+  const feature = FEATURE_CATALOG.find((f) => f.route && (pathname === f.route || pathname.startsWith(`${f.route}/`)));
+  return Boolean(feature && isFeatureEnabledForRole(institution, role, feature.key));
 }
 
 export function canManageTenantUsers(role) {
