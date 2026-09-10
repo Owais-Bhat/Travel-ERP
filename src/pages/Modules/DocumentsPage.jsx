@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   MdFolderShared, MdUploadFile, MdCheckCircle, MdCancel,
   MdPendingActions, MdBusiness, MdOpenInNew, MdDelete, MdVerified, MdDescription,
@@ -54,6 +54,7 @@ export default function DocumentsPage() {
   const notification = useNotification();
   const { profile } = useAuth();
   const isAdmin = canManageTenantUsers(profile?.role);
+  const selfService = ['student', 'parent'].includes(profile?.role);
 
   const [tab, setTab] = useState('students');
   const [statusFilter, setStatusFilter] = useState('');
@@ -71,6 +72,18 @@ export default function DocumentsPage() {
   const [studentQuery, setStudentQuery] = useState('');
   const [studentResults, setStudentResults] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(null);
+  // A student/parent uploads only for themselves/their own child — `/students`
+  // (the roster search below) isn't even granted to those roles, so they get
+  // their own linked record(s) from `/students/me` instead of a search box.
+  const [myStudents, setMyStudents] = useState([]);
+
+  useEffect(() => {
+    if (!selfService) return;
+    api.get('/students/me').then(({ data }) => {
+      setMyStudents(data || []);
+      if (data?.length === 1) setSelectedStudent(data[0]);
+    }).catch(() => setMyStudents([]));
+  }, [selfService]);
 
   const refresh = useCallback(() => {
     if (tab === 'students') documents.reload();
@@ -373,7 +386,28 @@ export default function DocumentsPage() {
         }
       >
         <div className="space-y-4">
-          {tab === 'students' && (
+          {tab === 'students' && selfService && (
+            myStudents.length > 1 ? (
+              <Select
+                label="Student"
+                required
+                wrapperClass="mb-0"
+                value={selectedStudent?.id || ''}
+                onChange={(event) => setSelectedStudent(myStudents.find((s) => s.id === event.target.value) || null)}
+                options={myStudents.map((s) => ({ value: s.id, label: `${s.first_name} ${s.last_name || ''}`.trim() }))}
+                placeholder="Choose your child"
+              />
+            ) : (
+              <Input
+                label="Student"
+                wrapperClass="mb-0"
+                value={selectedStudent ? `${selectedStudent.first_name} ${selectedStudent.last_name || ''}`.trim() : ''}
+                disabled
+              />
+            )
+          )}
+
+          {tab === 'students' && !selfService && (
             <div>
               <Input
                 label="Student"

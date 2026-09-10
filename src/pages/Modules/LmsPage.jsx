@@ -401,9 +401,11 @@ export default function LmsPage() {
                 <MdVideoLibrary className="w-12 h-12 text-white/20" />
                 <p className="text-white/50 text-lg">No lessons yet</p>
                 <p className="text-white/30 text-sm">Add the first lesson to this course</p>
-                <Button variant="primary" size="sm" onClick={openAddLesson}>
-                  <MdAdd className="mr-1 inline" /> Add Lesson
-                </Button>
+                {canManage && (
+                  <Button variant="primary" size="sm" onClick={openAddLesson}>
+                    <MdAdd className="mr-1 inline" /> Add Lesson
+                  </Button>
+                )}
               </GlassCard>
             ) : (
               <div className="space-y-3">

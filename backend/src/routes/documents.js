@@ -112,6 +112,20 @@ router.post(
     const body = req.body;
     const id = uuidv4();
 
+    // A student/parent holds `documents.write` for uploading their own (or
+    // their child's) documents — trusting a client-supplied student_id here
+    // would let either role attach a file to any other student in the
+    // tenant instead.
+    const role = req.auth.profile.role;
+    if (role === 'student' || role === 'parent') {
+      const scope = await resolveRoleScope(req);
+      const allowed = new Set(scope?.studentIds || []);
+      if (!body.student_id || !allowed.has(body.student_id)) {
+        await removeStoredFile(req.file);
+        throw ApiError.forbidden('You can only upload documents for your own record.');
+      }
+    }
+
     try {
       // Verify the owner belongs to this tenant before storing the reference.
       if (body.student_id) {

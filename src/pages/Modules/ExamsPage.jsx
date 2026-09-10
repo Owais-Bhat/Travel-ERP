@@ -412,9 +412,11 @@ export default function ExamsPage() {
                 <div className="flex flex-col items-center justify-center py-20 gap-3">
                   <MdSchool className="w-12 h-12 text-white/20" />
                   <p className="text-white/50 text-lg">No exams found</p>
-                  <Button variant="primary" size="sm" onClick={() => setCreateModal(true)}>
-                    <MdAdd className="mr-1 inline" /> Create First Exam
-                  </Button>
+                  {canManage && (
+                    <Button variant="primary" size="sm" onClick={() => setCreateModal(true)}>
+                      <MdAdd className="mr-1 inline" /> Create First Exam
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
