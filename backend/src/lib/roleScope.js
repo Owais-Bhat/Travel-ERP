@@ -54,4 +54,17 @@ export function inClause(column, values) {
   return { sql: `${column} IN (${values.map(() => '?').join(',')})`, params: values };
 }
 
+/**
+ * A student/parent's scope is a list of student ids; a teacher's is a list
+ * of class names (`studentIds` stays empty — see resolveRoleScope) — a
+ * per-student filter built from `studentIds` alone silently matches
+ * nothing for a teacher. This ORs both so one filter works for either
+ * shape: `(studentIdCol IN (...) OR classNameCol IN (...))`.
+ */
+export function inScopeClause(studentIdCol, classNameCol, scope) {
+  const ids = inClause(studentIdCol, scope?.studentIds);
+  const classes = inClause(classNameCol, scope?.classNames);
+  return { sql: `(${ids.sql} OR ${classes.sql})`, params: [...ids.params, ...classes.params] };
+}
+
 export default resolveRoleScope;

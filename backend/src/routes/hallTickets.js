@@ -32,10 +32,14 @@ router.get(
 
     // A student/parent can only pull their own (or their child's) hall
     // ticket — exams.read alone would otherwise let them fetch anyone's by
-    // swapping the studentId in the URL.
+    // swapping the studentId in the URL. A teacher's scope has no
+    // studentIds of their own (see resolveRoleScope), so check class
+    // membership instead — an id-only check would wrongly block a teacher
+    // from every one of their own students' hall tickets.
     const scope = await resolveRoleScope(req);
-    if (scope && !scope.studentIds.includes(student.id)) {
-      throw ApiError.forbidden('You can only view your own hall ticket.');
+    if (scope) {
+      const inOwnScope = scope.studentIds.includes(student.id) || scope.classNames.includes(student.class_name);
+      if (!inOwnScope) throw ApiError.forbidden('You can only view hall tickets for your own students.');
     }
 
     const clearance = await getFeeClearance(db, req.institutionId, student.id);

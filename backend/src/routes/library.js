@@ -15,7 +15,7 @@ import { requirePermission, requirePermissionOrSelfService } from '../auth/permi
 import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
 import { findOwnedOrFail, buildUpdate } from '../lib/query.js';
-import { resolveRoleScope, inClause } from '../lib/roleScope.js';
+import { resolveRoleScope, inScopeClause } from '../lib/roleScope.js';
 import { z, optionalText, idParam, partialUpdate } from '../validation/common.js';
 
 const router = express.Router();
@@ -133,9 +133,11 @@ router.get(
 
     // A student/parent only ever sees their own (or their child's) issued
     // books, not the whole school's — `students.read` alone would
-    // otherwise expose that, which is why self-service roles skip it above.
+    // otherwise expose that, which is why self-service roles skip it
+    // above. A teacher's scope is by class, not student id (see
+    // resolveRoleScope), so match on either.
     const scope = await resolveRoleScope(req);
-    const ownClause = scope ? inClause('li.student_id', scope.studentIds) : null;
+    const ownClause = scope ? inScopeClause('li.student_id', 's.class_name', scope) : null;
 
     const [rows] = await db.execute(
       `SELECT li.*, b.title AS book_title, b.author AS book_author,

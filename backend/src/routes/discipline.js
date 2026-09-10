@@ -15,7 +15,7 @@ import { recordAuditEvent } from '../lib/audit.js';
 import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
 import { findOwnedOrFail } from '../lib/query.js';
-import { resolveRoleScope, inClause } from '../lib/roleScope.js';
+import { resolveRoleScope, inScopeClause } from '../lib/roleScope.js';
 import { z, longText, idParam } from '../validation/common.js';
 
 const router = express.Router();
@@ -36,11 +36,15 @@ router.get(
   requirePermissionOrSelfService('students.read'),
   asyncHandler(async (req, res) => {
     // A student/parent can only ever see their own (or their child's)
-    // record — ignore whatever student_id the client sent and force their
-    // own scope, rather than letting a query param read anyone else's.
+    // record; a teacher sees their own classes' — ignore whatever
+    // student_id the client sent and force the caller's own scope, rather
+    // than letting a query param read anyone else's. A teacher's scope has
+    // no studentIds of their own (see resolveRoleScope) — inScopeClause
+    // matches on class instead so this isn't just "student/parent see
+    // nothing, teacher sees zero rows too".
     const scope = await resolveRoleScope(req);
     if (scope) {
-      const own = inClause('d.student_id', scope.studentIds);
+      const own = inScopeClause('d.student_id', 's.class_name', scope);
       const [rows] = await db.execute(
         `SELECT d.*, s.first_name, s.last_name, s.admission_no, s.class_name
            FROM discipline_records d
