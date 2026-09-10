@@ -42,6 +42,10 @@ const RISK_STYLES = {
 export default function FeeRecoveryPage() {
   const { profile } = useAuth();
   const notification = useNotification();
+  // This drafts a collections strategy against a family's overdue balance —
+  // an internal staff tool with no sense as self-service (a parent would be
+  // generating a recovery strategy against themselves).
+  const selfService = ['student', 'parent'].includes(profile?.role);
 
   // Mode
   const [mode, setMode] = useState('manual'); // 'student' | 'manual'
@@ -174,6 +178,20 @@ export default function FeeRecoveryPage() {
   };
 
   const riskLevel = getRiskLevel();
+
+  if (selfService) {
+    return (
+      <MainLayout>
+        <div className="p-6">
+          <GlassCard className="p-10 text-center text-white/40">
+            Fee Recovery drafts a collections strategy against an overdue balance — there's no version of that
+            meant for the family it would be drafted against. Ask your institution admin to turn this module off
+            for your role in Settings &gt; Role Restrictions.
+          </GlassCard>
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
