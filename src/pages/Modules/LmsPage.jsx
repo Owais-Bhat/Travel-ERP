@@ -18,7 +18,18 @@ import {
   MdVisibilityOff,
   MdVideoLibrary,
   MdDescription,
+  MdAttachFile,
+  MdDownload,
+  MdUploadFile,
 } from 'react-icons/md';
+import { API_BASE_URL } from '../../config';
+
+/** Uploads are served relative to the API host, not the SPA host. */
+const fileHref = (url) => {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  return `${API_BASE_URL.replace(/\/api\/?$/, '')}${url}`;
+};
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -81,6 +92,8 @@ export default function LmsPage() {
     title: '', content: '', video_url: '', lesson_order: '',
   });
   const [savingLesson, setSavingLesson] = useState(false);
+  const [lessonFile, setLessonFile] = useState(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
 
   // toggling publish
   const [togglingId, setTogglingId] = useState(null);
@@ -186,6 +199,7 @@ export default function LmsPage() {
       ? Math.max(...lessons.map((l) => l.lesson_order || 0)) + 1
       : 1;
     setLessonForm({ title: '', content: '', video_url: '', lesson_order: String(nextOrder) });
+    setLessonFile(null);
     setLessonModal(true);
   };
 
@@ -197,6 +211,7 @@ export default function LmsPage() {
       video_url: lesson.video_url || '',
       lesson_order: String(lesson.lesson_order || ''),
     });
+    setLessonFile(null);
     setLessonModal(true);
   };
 
@@ -215,13 +230,26 @@ export default function LmsPage() {
     };
 
     try {
-      if (editingLesson) {
-        await api.put(`/lms/lessons/${editingLesson.id}`, payload);
-      } else {
-        await api.post(`/lms/courses/${activeCourse.id}/lessons`, payload);
+      const { data: saved } = editingLesson
+        ? await api.put(`/lms/lessons/${editingLesson.id}`, payload)
+        : await api.post(`/lms/courses/${activeCourse.id}/lessons`, payload);
+
+      if (lessonFile) {
+        setUploadingFile(true);
+        const body = new FormData();
+        body.append('file', lessonFile);
+        try {
+          await api.post(`/lms/lessons/${saved.id}/file`, body);
+        } catch (err) {
+          notification.error('Lesson saved, but the file upload failed: ' + (err.response?.data?.error || err.message));
+        } finally {
+          setUploadingFile(false);
+        }
       }
+
       notification.success(editingLesson ? 'Lesson updated' : 'Lesson added');
       setLessonModal(false);
+      setLessonFile(null);
       loadLessons(activeCourse.id);
     } catch (err) {
       notification.error('Failed to save lesson: ' + (err.response?.data?.error || err.message));
@@ -437,6 +465,16 @@ export default function LmsPage() {
                                   <span>· {lesson.content.slice(0, 60)}{lesson.content.length > 60 ? '…' : ''}</span>
                                 )}
                               </div>
+                              {lesson.file_url && (
+                                <a
+                                  href={fileHref(lesson.file_url)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="mt-1.5 inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"
+                                >
+                                  <MdAttachFile className="w-3.5 h-3.5" /> Download attachment
+                                </a>
+                              )}
                             </div>
                             {canManage && (
                               <div className="flex gap-2 flex-shrink-0">
@@ -539,8 +577,8 @@ export default function LmsPage() {
         footer={
           <>
             <Button variant="secondary" onClick={() => setLessonModal(false)}>Cancel</Button>
-            <Button variant="primary" loading={savingLesson} onClick={handleSaveLesson}>
-              {editingLesson ? 'Update Lesson' : 'Add Lesson'}
+            <Button variant="primary" loading={savingLesson || uploadingFile} onClick={handleSaveLesson}>
+              {uploadingFile ? 'Uploading file…' : editingLesson ? 'Update Lesson' : 'Add Lesson'}
             </Button>
           </>
         }
@@ -589,6 +627,34 @@ export default function LmsPage() {
               />
             </div>
           )}
+
+          <div className="mb-1">
+            <label className="block text-sm font-medium mb-2">Attachment (optional)</label>
+            <label className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-white/20 hover:border-white/40 cursor-pointer text-sm text-white/70 transition">
+              <MdUploadFile className="w-4 h-4 shrink-0" />
+              {lessonFile
+                ? lessonFile.name
+                : editingLesson?.file_url
+                  ? 'Replace attached file…'
+                  : 'PDF, DOCX, PPTX, XLSX or image — up to 10MB'}
+              <input
+                type="file"
+                className="hidden"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp"
+                onChange={(e) => setLessonFile(e.target.files?.[0] || null)}
+              />
+            </label>
+            {editingLesson?.file_url && !lessonFile && (
+              <a
+                href={fileHref(editingLesson.file_url)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1.5 inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"
+              >
+                <MdDownload className="w-3.5 h-3.5" /> Current attachment
+              </a>
+            )}
+          </div>
         </div>
       </Modal>
     </MainLayout>

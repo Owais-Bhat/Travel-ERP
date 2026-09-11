@@ -22,6 +22,8 @@ const ALLOWED_MIME_TYPES = new Set([
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 ]);
 
 const EXTENSION_BY_MIME = {
@@ -34,6 +36,8 @@ const EXTENSION_BY_MIME = {
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
   'application/vnd.ms-excel': '.xls',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+  'application/vnd.ms-powerpoint': '.ppt',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
 };
 
 export const uploadsRoot = path.resolve(process.cwd(), env.uploads.dir);
@@ -60,7 +64,7 @@ export const upload = multer({
   fileFilter(req, file, callback) {
     if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
       return callback(ApiError.badRequest(
-        `Unsupported file type "${file.mimetype}". Allowed: PDF, JPG, PNG, WEBP, DOC(X), XLS(X).`
+        `Unsupported file type "${file.mimetype}". Allowed: PDF, JPG, PNG, WEBP, DOC(X), XLS(X), PPT(X).`
       ));
     }
     return callback(null, true);

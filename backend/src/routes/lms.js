@@ -15,6 +15,7 @@ import { requirePermission } from '../auth/permissions.js';
 import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validate } from '../lib/validate.js';
 import { buildWhere, findOwnedOrFail, buildUpdate } from '../lib/query.js';
+import { upload, publicUrlFor, uploadErrorHandler } from '../lib/uploads.js';
 import {
   z, optionalText, longText, listQuery, idParam, optionalUuid, partialUpdate,
 } from '../validation/common.js';
@@ -256,6 +257,25 @@ router.delete(
     await findLessonOrFail(req.params.id, req.institutionId);
     await db.execute('DELETE FROM lessons WHERE id = ?', [req.params.id]);
     res.json({ success: true });
+  })
+);
+
+/** Attaches a downloadable file (PDF, slides, worksheet, ...) to a lesson. */
+router.post(
+  '/lessons/:id/file',
+  requirePermission('programs.write'),
+  validate({ params: idParam }),
+  upload.single('file'),
+  uploadErrorHandler,
+  asyncHandler(async (req, res) => {
+    await findLessonOrFail(req.params.id, req.institutionId);
+    if (!req.file) throw ApiError.badRequest('No file uploaded. Send it as multipart/form-data field "file".');
+
+    const fileUrl = publicUrlFor(req.file, req.institutionId);
+    await db.execute('UPDATE lessons SET file_url = ? WHERE id = ?', [fileUrl, req.params.id]);
+
+    const [rows] = await db.execute('SELECT * FROM lessons WHERE id = ?', [req.params.id]);
+    res.json(rows[0]);
   })
 );
 
