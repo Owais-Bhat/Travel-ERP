@@ -34,6 +34,11 @@ export const env = {
 
   allowedOrigins: list(process.env.FRONTEND_ORIGIN, ['http://localhost:5173']),
 
+  // Self-hosted Jitsi Meet domain for in-app video classes (no scheme,
+  // e.g. "meet.example.com"). Absent by default — until set, a video
+  // class can only be scheduled in "external" (meeting-link) mode.
+  jitsiDomain: process.env.JITSI_DOMAIN || '',
+
   mysql: {
     host: process.env.MYSQL_HOST || 'localhost',
     port: int(process.env.MYSQL_PORT, 3306),

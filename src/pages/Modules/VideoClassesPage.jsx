@@ -4,23 +4,31 @@ import MainLayout from '../../components/Layout/MainLayout';
 import GlassCard from '../../components/Common/GlassCard';
 import Button from '../../components/Common/Button';
 import Input from '../../components/Common/Input';
+import JitsiRoom from '../../components/VideoClasses/JitsiRoom';
 import { useAuth } from '../../hooks/useAuth';
+import { useAppData } from '../../hooks/useAppData';
 import { useNotification } from '../../hooks/useNotification';
 import api from '../../lib/api';
 import { MdAdd, MdEdit, MdDelete, MdClose, MdVideocam, MdOpenInNew } from 'react-icons/md';
 
-const EMPTY_FORM = { title: '', subject: '', class_name: '', teacher_id: '', meeting_link: '', scheduled_at: '', duration_minutes: 40 };
+const EMPTY_FORM = {
+  title: '', subject: '', class_name: '', teacher_id: '',
+  mode: 'external', meeting_link: '', scheduled_at: '', duration_minutes: 40,
+};
 
 export default function VideoClassesPage() {
   const { profile } = useAuth();
+  const { institution } = useAppData();
   const notification = useNotification();
   const canManage = !['student', 'parent'].includes(profile?.role);
+  const jitsiEnabled = Boolean(institution?.jitsi_enabled);
 
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [teachers, setTeachers] = useState([]);
   const [filter, setFilter] = useState('scheduled');
+  const [activeRoom, setActiveRoom] = useState(null);
 
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -59,7 +67,7 @@ export default function VideoClassesPage() {
       setEditing(item);
       setForm({
         title: item.title || '', subject: item.subject || '', class_name: item.class_name || '',
-        teacher_id: item.teacher_id || '', meeting_link: item.meeting_link || '',
+        teacher_id: item.teacher_id || '', mode: item.mode || 'external', meeting_link: item.meeting_link || '',
         scheduled_at: (item.scheduled_at || '').replace(' ', 'T').slice(0, 16),
         duration_minutes: item.duration_minutes || 40,
       });
@@ -72,12 +80,13 @@ export default function VideoClassesPage() {
 
   const handleSave = async () => {
     if (!form.title.trim()) { notification.error('Title is required'); return; }
-    if (!form.meeting_link.trim()) { notification.error('Meeting link is required'); return; }
+    if (form.mode === 'external' && !form.meeting_link.trim()) { notification.error('Meeting link is required'); return; }
     if (!form.scheduled_at) { notification.error('Schedule date/time is required'); return; }
     setSaving(true);
     const payload = {
       title: form.title.trim(), subject: form.subject.trim(), class_name: form.class_name.trim(),
-      teacher_id: form.teacher_id || null, meeting_link: form.meeting_link.trim(),
+      teacher_id: form.teacher_id || null, mode: form.mode,
+      meeting_link: form.mode === 'external' ? form.meeting_link.trim() : undefined,
       scheduled_at: form.scheduled_at, duration_minutes: parseInt(form.duration_minutes, 10) || 40,
     };
     try {
@@ -186,9 +195,19 @@ export default function VideoClassesPage() {
                     {canManage && item.status === 'scheduled' && (
                       <button onClick={() => handleMarkCompleted(item)} className="text-xs text-white/50 hover:text-white">Mark done</button>
                     )}
-                    <a href={item.meeting_link} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300 text-sm font-semibold inline-flex items-center gap-1">
-                      Join <MdOpenInNew className="w-3.5 h-3.5" />
-                    </a>
+                    {item.mode === 'jitsi' ? (
+                      <button
+                        onClick={() => setActiveRoom(item)}
+                        disabled={!item.room_url}
+                        className="text-blue-400 hover:text-blue-300 text-sm font-semibold inline-flex items-center gap-1 disabled:opacity-40"
+                      >
+                        Join <MdVideocam className="w-3.5 h-3.5" />
+                      </button>
+                    ) : (
+                      <a href={item.meeting_link} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300 text-sm font-semibold inline-flex items-center gap-1">
+                        Join <MdOpenInNew className="w-3.5 h-3.5" />
+                      </a>
+                    )}
                   </div>
                 </div>
               </GlassCard>
@@ -219,7 +238,28 @@ export default function VideoClassesPage() {
                     <option key={t.id} value={t.id}>{t.first_name} {t.last_name}</option>
                   ))}
                 </select>
-                <Input label="Meeting Link" required placeholder="https://meet.google.com/..." value={form.meeting_link} onChange={e => setForm(f => ({ ...f, meeting_link: e.target.value }))} />
+                {jitsiEnabled && (
+                  <div className="mb-3">
+                    <label className="block text-sm font-medium mb-2">Classroom type</label>
+                    <div className="flex gap-2">
+                      {[{ v: 'jitsi', label: 'In-app classroom' }, { v: 'external', label: 'External link' }].map(opt => (
+                        <button
+                          key={opt.v}
+                          type="button"
+                          onClick={() => setForm(f => ({ ...f, mode: opt.v }))}
+                          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition ${
+                            form.mode === opt.v ? 'bg-blue-500/30 text-blue-300 border border-blue-500/40' : 'text-white/50 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {form.mode === 'external' && (
+                  <Input label="Meeting Link" required placeholder="https://meet.google.com/..." value={form.meeting_link} onChange={e => setForm(f => ({ ...f, meeting_link: e.target.value }))} />
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <Input label="Date & Time" type="datetime-local" required value={form.scheduled_at} onChange={e => setForm(f => ({ ...f, scheduled_at: e.target.value }))} />
                   <Input label="Duration (min)" type="number" min="5" value={form.duration_minutes} onChange={e => setForm(f => ({ ...f, duration_minutes: e.target.value }))} />
@@ -232,6 +272,18 @@ export default function VideoClassesPage() {
             </GlassCard>
           </div>,
           document.body
+        )}
+
+        {activeRoom && (
+          <JitsiRoom
+            domain={activeRoom.room_url.replace(/^https?:\/\//, '').split('/')[0]}
+            roomName={activeRoom.room_name}
+            displayName={profile?.name || 'Guest'}
+            email={profile?.email}
+            videoClassId={activeRoom.id}
+            canSelfMarkAttendance={!canManage}
+            onClose={() => setActiveRoom(null)}
+          />
         )}
       </div>
     </MainLayout>

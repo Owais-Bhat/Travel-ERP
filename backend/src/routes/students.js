@@ -26,6 +26,7 @@ import {
 import {
   z, optionalText, longText, isoDate, listQuery, idParam, email, phone, partialUpdate, optionalUuid,
 } from '../validation/common.js';
+import { resolveRoleScope } from '../lib/roleScope.js';
 
 const router = express.Router();
 
@@ -177,6 +178,15 @@ router.get(
   asyncHandler(async (req, res) => {
     // Confirms the student is in this tenant before exposing any marks.
     await findOwnedOrFail(db, 'students', req.params.id, req.institutionId);
+
+    // A student/parent with exams.read can only ever pull their own (or
+    // their child's) marks — otherwise the :id in the URL is a straight
+    // IDOR onto every other student's results.
+    const scope = await resolveRoleScope(req);
+    const isSelfServiceRole = ['student', 'parent'].includes(req.auth.profile.role);
+    if (isSelfServiceRole && !scope?.studentIds.includes(req.params.id)) {
+      throw ApiError.forbidden('You can only view your own results.');
+    }
 
     const [rows] = await db.execute(
       `SELECT r.id, r.marks_obtained, r.grade, r.remarks, r.created_at,

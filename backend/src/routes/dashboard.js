@@ -209,4 +209,48 @@ router.get('/attendance-trend', async (req, res) => {
   }
 });
 
+// Monthly attendance percentage for the caller's own student(s) — powers
+// the personal performance report on the Reports page for student/parent.
+// Not meaningful institution-wide, so unlike /attendance-trend this only
+// serves self-service roles.
+router.get('/performance-trend', async (req, res) => {
+  try {
+    const institutionId = req.auth.profile.institution_id;
+    const role = req.auth.profile.role;
+    if (!['student', 'parent'].includes(role)) {
+      return res.status(403).json({ error: 'This report is only available to student and parent accounts.' });
+    }
+
+    const scope = await resolveRoleScope(req);
+    const studentId = req.query.studentId && scope.studentIds.includes(req.query.studentId)
+      ? req.query.studentId
+      : scope.studentIds[0];
+    if (!studentId) return res.json({ months: [] });
+
+    const monthsAgo = new Date();
+    monthsAgo.setMonth(monthsAgo.getMonth() - 5);
+    const from = monthsAgo.toISOString().split('T')[0];
+
+    const [rows] = await db.execute(
+      `SELECT DATE_FORMAT(date, '%Y-%m') AS month,
+              SUM(status = 'present') AS present,
+              COUNT(*) AS total
+         FROM attendance
+        WHERE institution_id = ? AND student_id = ? AND date >= ?
+        GROUP BY month
+        ORDER BY month`,
+      [institutionId, studentId, from]
+    );
+
+    const months = rows.map((row) => ({
+      month: row.month,
+      percentage: row.total > 0 ? Math.round((row.present / row.total) * 100) : 0,
+    }));
+
+    res.json({ months });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

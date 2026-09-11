@@ -1,0 +1,21 @@
+# Optional overrides for a small-school deployment. Copy this file into your
+# docker-jitsi-meet checkout as `docker-compose.override.yml` (same
+# directory as its own docker-compose.yml) before running `docker compose up -d`.
+# See ../README.md for the full setup runbook.
+
+services:
+  jvb:
+    environment:
+      # Caps how much a single video bridge instance tries to handle —
+      # fine for one class of 30-40 at a time; raise if multiple classes
+      # run concurrently and the VPS has the CPU/bandwidth for it.
+      - JVB_STUN_SERVERS=meet-jit-si-turnrelay.jitsi.net:443
+      - COLIBRI_REST_ENABLED=true
+
+  web:
+    environment:
+      # Keeps the lobby off by default (v1 relies on unguessable room
+      # names for access control, per the app's server-generated room_name)
+      - ENABLE_LOBBY=false
+      - START_WITH_AUDIO_MUTED=true
+      - START_WITH_VIDEO_MUTED=false

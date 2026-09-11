@@ -26,6 +26,7 @@ import {
   sanitizeRoleFeatures, RESTRICTABLE_ROLES, FEATURE_CATALOG,
 } from '../saas/features.js';
 import { getEffectivePlanLimits } from '../saas/planOverrides.js';
+import { env } from '../lib/env.js';
 
 const router = express.Router();
 
@@ -70,6 +71,9 @@ router.get(
       // What the *caller's own role* can actually see — the plan ceiling
       // narrowed by any per-role restriction the tenant admin has set.
       my_features: getEffectiveFeatureMap({ ...institution, settings }, req.auth.profile.role),
+      // Lets the Video Classes UI hide the "in-app classroom" option until
+      // a self-hosted Jitsi domain is actually configured server-side.
+      jitsi_enabled: Boolean(env.jitsiDomain),
     });
   })
 );

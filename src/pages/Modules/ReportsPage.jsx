@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, BarChart, Bar, Legend,
@@ -94,17 +94,7 @@ export default function ReportsPage() {
   const trends = useEndpoint('/reports/trends', { params: { ...rangeParams, metric }, enabled: !selfService });
 
   if (selfService) {
-    return (
-      <MainLayout>
-        <div className="p-4 sm:p-6">
-          <GlassCard className="p-10 text-center text-white/40">
-            Reports & Analytics covers institution-wide numbers — admissions, leads, commissions — with nothing
-            scoped to an individual student or parent to show here. Ask your institution admin to turn this module
-            off for your role in Settings &gt; Role Restrictions.
-          </GlassCard>
-        </div>
-      </MainLayout>
-    );
+    return <PersonalPerformanceReport />;
   }
 
   const colors = useMemo(() => ({
@@ -370,6 +360,226 @@ export default function ReportsPage() {
             </div>
           </Surface>
         </Reveal>
+      </div>
+    </MainLayout>
+  );
+}
+
+/**
+ * Reports for a student/parent login — no institution-wide numbers apply,
+ * so this shows their own (or their child's) attendance and exam-marks
+ * trend instead of the admin overview above.
+ */
+function PersonalPerformanceReport() {
+  const [children, setChildren] = useState([]);
+  const [activeId, setActiveId] = useState(null);
+  const [results, setResults] = useState([]);
+  const [attendance, setAttendance] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const colors = useMemo(() => ({
+    primary: themeColor('--neu-primary', '#4059ad'),
+    teal: themeColor('--neu-teal', '#0e7c7b'),
+    line: themeColor('--neu-line', 'rgba(146,158,182,0.28)'),
+    muted: themeColor('--neu-ink-muted', '#7c889e'),
+  }), []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await api.get('/students/me');
+        setChildren(data || []);
+        if (data?.[0]) setActiveId(data[0].id);
+        else setLoading(false);
+      } catch {
+        setChildren([]);
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!activeId) return;
+    setLoading(true);
+    Promise.all([
+      api.get(`/students/${activeId}/results`),
+      api.get('/dashboard/performance-trend', { params: { studentId: activeId } }),
+    ])
+      .then(([resultsRes, trendRes]) => {
+        setResults(resultsRes.data || []);
+        setAttendance(trendRes.data?.months || []);
+      })
+      .catch(() => { setResults([]); setAttendance([]); })
+      .finally(() => setLoading(false));
+  }, [activeId]);
+
+  const examSeries = useMemo(
+    () => [...results].reverse().map((r) => ({
+      name: r.exam_title,
+      marks: Number(r.marks_obtained) || 0,
+      classAverage: Number(r.class_average) || 0,
+      total: Number(r.total_marks) || null,
+    })),
+    [results]
+  );
+
+  const subjectAverages = useMemo(() => {
+    const bySubject = new Map();
+    for (const r of results) {
+      const subject = r.subject || 'General';
+      const pct = r.total_marks ? (Number(r.marks_obtained) / Number(r.total_marks)) * 100 : null;
+      if (pct === null) continue;
+      const entry = bySubject.get(subject) || { subject, total: 0, count: 0 };
+      entry.total += pct;
+      entry.count += 1;
+      bySubject.set(subject, entry);
+    }
+    return [...bySubject.values()].map((e) => ({ subject: e.subject, average: Math.round(e.total / e.count) }));
+  }, [results]);
+
+  return (
+    <MainLayout>
+      <div className="p-4 sm:p-6 space-y-6 scene">
+        <PageHeader
+          title="My Performance"
+          subtitle={children.length > 1 ? "Choose a child below" : "Your attendance and exam trend"}
+          icon={MdAssessment}
+        />
+
+        {children.length === 0 && !loading ? (
+          <GlassCard className="p-10 text-center text-white/40">
+            No linked student record found. Ask your institution admin to link this account in Settings.
+          </GlassCard>
+        ) : (
+          <>
+            {children.length > 1 && (
+              <div className="flex flex-wrap gap-2">
+                {children.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setActiveId(c.id)}
+                    className="px-3 py-1.5 text-xs font-semibold rounded-lg transition"
+                    style={{
+                      background: activeId === c.id ? 'var(--neu-primary)' : 'var(--neu-bg)',
+                      color: activeId === c.id ? '#fff' : 'var(--neu-ink)',
+                      boxShadow: activeId === c.id ? 'none' : 'var(--neu-e1)',
+                    }}
+                  >
+                    {c.first_name} {c.last_name}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <Stagger className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+              <StaggerItem>
+                <StatCard
+                  label="Attendance (this month)"
+                  value={attendance.at(-1)?.percentage ?? 0}
+                  suffix="%"
+                  icon={MdAssessment}
+                  tone="teal"
+                />
+              </StaggerItem>
+              <StaggerItem>
+                <StatCard
+                  label="Exams recorded"
+                  value={results.length}
+                  icon={MdWorkspacePremium}
+                  tone="violet"
+                />
+              </StaggerItem>
+              <StaggerItem>
+                <StatCard
+                  label="Subjects tracked"
+                  value={subjectAverages.length}
+                  icon={MdBusiness}
+                  tone="coral"
+                />
+              </StaggerItem>
+            </Stagger>
+
+            <Reveal>
+              <Surface variant="raised">
+                <p className="font-semibold mb-1" style={{ color: 'var(--neu-ink)' }}>Attendance trend</p>
+                <p className="text-xs mb-4" style={{ color: 'var(--neu-ink-muted)' }}>Last 6 months</p>
+                <div style={{ width: '100%', height: 240 }}>
+                  {loading ? (
+                    <div className="neu-skeleton h-full" />
+                  ) : attendance.length === 0 ? (
+                    <div className="h-full flex items-center justify-center">
+                      <p className="text-sm mb-0" style={{ color: 'var(--neu-ink-muted)' }}>No attendance recorded yet.</p>
+                    </div>
+                  ) : (
+                    <ResponsiveContainer>
+                      <AreaChart data={attendance} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="attendanceFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={colors.teal} stopOpacity={0.35} />
+                            <stop offset="100%" stopColor={colors.teal} stopOpacity={0.02} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke={colors.line} vertical={false} />
+                        <XAxis dataKey="month" tick={{ fontSize: 11, fill: colors.muted }} axisLine={false} tickLine={false} />
+                        <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: colors.muted }} axisLine={false} tickLine={false} />
+                        <Tooltip content={<ChartTooltip />} />
+                        <Area type="monotone" dataKey="percentage" name="Attendance %" stroke={colors.teal} strokeWidth={2.5} fill="url(#attendanceFill)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </Surface>
+            </Reveal>
+
+            <Reveal delay={0.05}>
+              <Surface variant="raised">
+                <p className="font-semibold mb-1" style={{ color: 'var(--neu-ink)' }}>Exam marks vs class average</p>
+                <p className="text-xs mb-4" style={{ color: 'var(--neu-ink-muted)' }}>Most recent exams first, oldest to newest</p>
+                <div style={{ width: '100%', height: 260 }}>
+                  {loading ? (
+                    <div className="neu-skeleton h-full" />
+                  ) : examSeries.length === 0 ? (
+                    <div className="h-full flex items-center justify-center">
+                      <p className="text-sm mb-0" style={{ color: 'var(--neu-ink-muted)' }}>No exam results published yet.</p>
+                    </div>
+                  ) : (
+                    <ResponsiveContainer>
+                      <BarChart data={examSeries} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={colors.line} vertical={false} />
+                        <XAxis dataKey="name" tick={{ fontSize: 10, fill: colors.muted }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 11, fill: colors.muted }} axisLine={false} tickLine={false} />
+                        <Tooltip content={<ChartTooltip />} />
+                        <Legend wrapperStyle={{ fontSize: 12 }} />
+                        <Bar dataKey="classAverage" name="Class Average" fill={colors.line} radius={[6, 6, 0, 0]} />
+                        <Bar dataKey="marks" name="Your Marks" fill={colors.primary} radius={[6, 6, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </Surface>
+            </Reveal>
+
+            {subjectAverages.length > 0 && (
+              <Reveal delay={0.1}>
+                <Surface variant="raised">
+                  <p className="font-semibold mb-4" style={{ color: 'var(--neu-ink)' }}>Subject-wise average</p>
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {subjectAverages.map((s) => (
+                      <div
+                        key={s.subject}
+                        className="flex items-center justify-between p-3"
+                        style={{ borderRadius: 'var(--neu-radius)', background: 'var(--neu-bg)', boxShadow: 'var(--neu-e1)' }}
+                      >
+                        <span className="text-sm font-medium" style={{ color: 'var(--neu-ink)' }}>{s.subject}</span>
+                        <span className="text-sm font-bold" style={{ color: 'var(--neu-primary)' }}>{s.average}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </Surface>
+              </Reveal>
+            )}
+          </>
+        )}
       </div>
     </MainLayout>
   );
